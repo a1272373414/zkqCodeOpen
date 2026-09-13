@@ -41,6 +41,8 @@ suspend fun mainBaseAttack(): Boolean {
             val remainingMinutes = (maxDurationMs - elapsed) / 60000.0
 
             ShowMessage("账号${InGamesVars.currentAccountNumber}，对战中，${"%.1f".format(remainingMinutes)}分钟后强制退出对战")
+            // Dismiss the event reward popup if present (can appear 0-3 times during battle)
+            if (handleRewardPopup()) continue
             val endBattleButton = findMultiColors(schema = MyColors.EndBattle)
             if (endBattleButton == null) {
                 ShowMessage("账号${InGamesVars.currentAccountNumber}，未找到放弃按钮，对战结束")

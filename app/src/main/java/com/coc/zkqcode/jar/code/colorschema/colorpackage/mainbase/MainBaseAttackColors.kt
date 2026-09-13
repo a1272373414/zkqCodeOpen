@@ -49,6 +49,12 @@ interface IMainBaseAttackColors {
     val SpecialTroopColorAtDeploymentBar: ColorSchema
     val WaitForBattle: ColorSchema
     val BattlePage: ColorSchema
+
+    // Event reward popup ("选择一项奖励！") title ribbon — battle variant (ribbon y:90-132)
+    val RewardPopupTitle: ColorSchema
+
+    // Event reward popup title ribbon — settlement variant (ribbon shifted down, y:175-217)
+    val RewardPopupTitle2: ColorSchema
 }
 
 object MainBaseAttackColors : IMainBaseAttackColors {
@@ -206,5 +212,19 @@ object MainBaseAttackColors : IMainBaseAttackColors {
     )
     override val BattlePage = ColorSchema.parse(
         92, 198, 712, 455, "83BEFF", "23|0|A5BECF,46|0|4C3D57,68|0|29478F,91|0|5567A5,0|30|7B7C7C,23|30|254154,46|30|61B2FD,68|30|76BBFD,91|30|485992", 0, 0.9, "对战页面"
+    )
+
+    // Event reward popup title ribbon "选择一项奖励！" (1280x720), battle variant.
+    // Real pixel sampling (2026-09-13): ribbon top edge y:90-132, left body edge x≈408.
+    // Anchor strip x:410-426 hits the ribbon top edge; all offset points stay left of the
+    // white title text (x≥500) and were verified on two battle screenshots (similarity 0.85).
+    override val RewardPopupTitle = ColorSchema.parse(
+        410, 86, 426, 140, "2C2C9F", "42|8|26268C,10|20|2D2DA2,42|20|2C2CA2,74|20|2C2CA1,10|32|292995,42|32|292996,74|32|292996", 0, 0.85, "选择一项奖励-对战"
+    )
+
+    // Same title ribbon on the settlement screen: shifted down (top edge y:175-217).
+    // Offsets verified on the settlement screenshot.
+    override val RewardPopupTitle2 = ColorSchema.parse(
+        410, 170, 426, 222, "2C2C9F", "42|8|21217A,74|8|282893,10|20|21217C,74|20|2B2C9F,74|32|292991", 0, 0.85, "选择一项奖励-结算"
     )
 }

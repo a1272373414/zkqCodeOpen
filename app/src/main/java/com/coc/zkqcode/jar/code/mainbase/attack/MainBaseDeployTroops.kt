@@ -34,6 +34,8 @@ suspend fun mainBaseDeployTroops() {
     // Record the start time of the battle
     zoomSmallMainBase(isForAttack = true)
     repeat(3) {
+        // Dismiss the event reward popup if present (destruction milestones can trigger it while deploying)
+        if (handleRewardPopup()) delayWithMultiplier(800)
         // Deploy each troop type if detected in the deployment bar
         deployIfPresent(DRAG_SWEEP_MS, MyColors.DragonAtDeploymentBar, MyColors.DragonAtDeploymentBar2)
         deployIfPresent(DRAG_SWEEP_MS, MyColors.GiantAtDeploymentBar, MyColors.GiantAtDeploymentBar2)

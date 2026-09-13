@@ -6,6 +6,7 @@ import com.coc.zkqcode.core.util.basic.ShowMessage
 import com.coc.zkqcode.core.util.fileactions.LogHelper.logAndRestart
 import com.coc.zkqcode.core.util.touchactions.TouchActions
 import com.coc.zkqcode.jar.code.colorschema.MyColors
+import com.coc.zkqcode.jar.code.mainbase.attack.handleRewardPopup
 import com.coc.zkqcode.jar.code.universal.colors.findMultiColors
 import com.coc.zkqcode.jar.code.universal.smalltools.checkReconnections
 import com.coc.zkqcode.jar.code.universal.smalltools.getBooleanConfigRuntime
@@ -49,6 +50,8 @@ suspend fun enterMainScreen(isDoubleCheck: Boolean = false): Boolean {
                 }
             }
             if (!checkReconnections()) return false
+            // Dismiss the event reward popup if present (can appear on the settlement screen)
+            if (handleRewardPopup()) continue
             ShowMessage("账号${InGamesVars.currentAccountNumber}，倒计时${((timeoutMillis - System.currentTimeMillis() + startTime) / 1000).toInt()}秒")
             closeAdvertisements()
 
