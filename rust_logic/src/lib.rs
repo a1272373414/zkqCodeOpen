@@ -4,7 +4,6 @@ use jni::{JavaVM, NativeMethod};
 use log::LevelFilter;
 use std::ffi::c_void;
 
-pub mod auth;
 mod bridge;
 pub mod color;
 mod dexloader;
@@ -21,9 +20,6 @@ pub extern "system" fn JNI_OnLoad(vm: JavaVM, _reserved: *mut c_void) -> jint {
     );
 
     log::info!("Rust logging system initialized successfully!");
-
-    // Start security monitoring
-    security::anti_debug::start_security_monitor();
 
     let mut env = vm.get_env().expect("Cannot get JNIEnv");
 
@@ -55,54 +51,9 @@ pub extern "system" fn JNI_OnLoad(vm: JavaVM, _reserved: *mut c_void) -> jint {
             fn_ptr: security::cypherhelper::decryptJar as *mut c_void,
         },
         NativeMethod {
-            name: "generateNonce".into(),
-            sig: "()Ljava/lang/String;".into(),
-            fn_ptr: security::login::generateNonce as *mut c_void,
-        },
-        NativeMethod {
-            name: "encryptLoginPayload".into(),
-            sig: "(Ljava/lang/String;)Ljava/lang/String;".into(),
-            fn_ptr: security::login::encryptLoginPayload as *mut c_void,
-        },
-        NativeMethod {
-            name: "decryptLoginResponse".into(),
-            sig: "(Ljava/lang/String;)Ljava/lang/String;".into(),
-            fn_ptr: security::login::decryptLoginResponse as *mut c_void,
-        },
-        NativeMethod {
             name: "createInMemoryDex".into(),
             sig: "([B)I".into(),
             fn_ptr: dexloader::dex_loader::create_in_memory_dex as *mut c_void,
-        },
-        NativeMethod {
-            name: "getLastTime".into(),
-            sig: "()J".into(),
-            fn_ptr: auth::last_time::getLastTime as *mut c_void,
-        },
-        NativeMethod {
-            name: "updateLastTime".into(),
-            sig: "(J)V".into(),
-            fn_ptr: auth::last_time::updateLastTime as *mut c_void,
-        },
-        NativeMethod {
-            name: "getIsAuthPass".into(),
-            sig: "()Z".into(),
-            fn_ptr: auth::ad_track::getIsAuthPass as *mut c_void,
-        },
-        NativeMethod {
-            name: "revokeAuthPass".into(),
-            sig: "()V".into(),
-            fn_ptr: auth::ad_track::revokeAuthPass as *mut c_void,
-        },
-        NativeMethod {
-            name: "markAdStart".into(),
-            sig: "()V".into(),
-            fn_ptr: auth::ad_track::markAdStart as *mut c_void,
-        },
-        NativeMethod {
-            name: "markAdEnd".into(),
-            sig: "()V".into(),
-            fn_ptr: auth::ad_track::markAdEnd as *mut c_void,
         },
         NativeMethod {
             name: "findMultiColors".into(),

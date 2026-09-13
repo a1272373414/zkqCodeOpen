@@ -37,10 +37,6 @@ object GlobalVars {
     @Volatile
     var updateWindowPosition: Boolean = false
 
-    @Volatile
-    var isAdPlaying: Boolean = false
-    var isShowAd: Boolean = true
-
     // Hot update signal: JAR emits a CompletableDeferred so it can await completion
     val updateCheckSignal = MutableSharedFlow<CompletableDeferred<Unit>>(extraBufferCapacity = 1)
 

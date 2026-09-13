@@ -21,8 +21,10 @@ data class DetectionResult(
 
 object YoloDetector {
     private const val BASE_URL = "http://localhost:13462"
+    // Adapted for building_plugin (applicationId: com.building.plugin, service: DetectorService)
+    private const val PLUGIN_PACKAGE = "com.building.plugin"
     private const val SERVICE_START_CMD =
-        "am start-foreground-service -n com.coc.zkqyolo/.service.YoloService"
+        "am start-foreground-service -n $PLUGIN_PACKAGE/.service.DetectorService"
     private const val READY_TIMEOUT_MS = 10_000L
     private const val POLL_INTERVAL_MS = 1000L
 
@@ -36,13 +38,13 @@ object YoloDetector {
     /**
      * Polls /status every ~1 second, restarting the service each iteration if unreachable.
      * Returns true once the server responds, or false after 10 seconds.
-     * Returns false immediately if com.coc.zkqyolo is not installed.
+     * Returns false immediately if building_plugin (com.building.plugin) is not installed.
      */
     private suspend fun ensureServerReady(): Boolean {
-        // Check if the YOLO package is installed before attempting to start
-        val installed = RunShell.run("pm list packages com.coc.zkqyolo", isCheckIsPlaying = false)
-        if (installed.none { it.contains("com.coc.zkqyolo") }) {
-            ShowMessage("AI插件未安装，请去网盘手动下载后，才能使用AI功能")
+        // Check if building_plugin is installed before attempting to start
+        val installed = RunShell.run("pm list packages $PLUGIN_PACKAGE", isCheckIsPlaying = false)
+        if (installed.none { it.contains(PLUGIN_PACKAGE) }) {
+            ShowMessage("AI插件(building_plugin)未安装，请手动安装后才能使用AI功能")
             return false
         }
 

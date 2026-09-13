@@ -127,6 +127,7 @@ suspend fun searchOpponentsAndDeployTroops(): Boolean {
             break
         }
         if (!checkReconnections()) return false
+
         val nextOpponent = findMultiColors(schema = MyColors.NextOpponent)
         if (nextOpponent != null) {
             searchTimes++

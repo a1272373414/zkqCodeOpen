@@ -11,24 +11,6 @@ object RustTools {
 
     external fun decryptJar(data: ByteArray): ByteArray
 
-    external fun generateNonce(): String
-
-    external fun encryptLoginPayload(payload: String): String
-
-    external fun decryptLoginResponse(encryptedResponse: String): String
-
-    external fun getLastTime(): Long
-
-    external fun updateLastTime(newTime: Long)
-
-    external fun getIsAuthPass(): Boolean
-
-    external fun revokeAuthPass()
-
-    external fun markAdStart()
-
-    external fun markAdEnd()
-
     external fun createInMemoryDex(data: ByteArray): Int
 
     external fun findMultiColors(

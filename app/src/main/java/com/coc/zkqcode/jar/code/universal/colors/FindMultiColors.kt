@@ -7,14 +7,9 @@ import com.coc.zkqcode.core.data.database.GlobalVars
 import com.coc.zkqcode.core.util.basic.ShowMessage
 import com.coc.zkqcode.core.util.basic.waitForPlay
 import com.coc.zkqcode.core.util.fileactions.LogHelper.logAndRestart
-import com.coc.zkqcode.jar.code.auth.userAuth
 import com.coc.zkqcode.jar.code.colorschema.ColorSchema
 import com.coc.zkqcode.nativehelper.RustTools
 import kotlinx.coroutines.delay
-import java.util.concurrent.atomic.AtomicInteger
-
-// Counter to track the total number of findMultiColors invocations
-private val findMultiColorsCallCount = AtomicInteger(0)
 
 
 /**
@@ -32,14 +27,6 @@ suspend fun findMultiColors(
     increment: Int = 10
 ): Point? {
     waitForPlay()
-
-    // Add increment to the call counter 
-    val count = findMultiColorsCallCount.addAndGet(increment)
-    if (count > 40 * 3000) {
-        userAuth()
-        // Reset the call counter after triggering verification
-        findMultiColorsCallCount.set(0)
-    }
 
     val resultAny = when {
         bitmap != null -> null

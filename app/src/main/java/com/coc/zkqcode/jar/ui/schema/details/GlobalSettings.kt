@@ -11,8 +11,6 @@ object GlobalSettings {
     val EXTRACT_CN = SettingDef("extract_cn", "提取国服存档到此序号", "1", "GLOBAL_SETTINGS")
     val EXTRACT_GLOBAL = SettingDef("extract_global", "提取国际服存档到此序号", "1", "GLOBAL_SETTINGS")
 
-    val EMAIL = SettingDef("email", "邮箱", "free@zkq", "GLOBAL_SETTINGS")
-    val PASSWORD = SettingDef("password", "密码", "free_for_testing", "GLOBAL_SETTINGS")
     val ENTER_GAME_TIMER = SettingDef("enter_game_timer", "进入游戏计时", "80", "GLOBAL_SETTINGS")
     val DELAY_MULTIPLIER = SettingDef(
         "delay_multiplier", "延时倍率(低性能设备建议设置1.5-2.5)", "1", "GLOBAL_SETTINGS"
@@ -25,7 +23,6 @@ object GlobalSettings {
     val CREATE_PREFIX = SettingDef("create_prefix", "创号前缀", "紫孔雀", "GLOBAL_SETTINGS")
     val ADD_SUFFIX_SETTING = SettingDef("add_suffix_setting", "添加数字后缀", 0, "GLOBAL_SETTINGS")
     val CREATE_GEM_BUILD = SettingDef("create_gem_build", "创号时宝石秒建筑", 0, "GLOBAL_SETTINGS")
-    val GEM_COUNT = SettingDef("gem_count", "宝石数量", "", "GLOBAL_SETTINGS")
     val AFTER_KICK_OPTION = SettingDef("after_kick_option", "顶号后选项", "1", "GLOBAL_SETTINGS")
     val DEVICE_REMARK = SettingDef("device_remark", "设备备注", "", "GLOBAL_SETTINGS")
     val RUNTIME_SCREENSHOT = SettingDef("runtime_screenshot", "运行时截图", 0, "GLOBAL_SETTINGS")
@@ -38,8 +35,6 @@ object GlobalSettings {
         SWITCH_ACCOUNT_VERSION,
         EXTRACT_CN,
         EXTRACT_GLOBAL,
-        EMAIL,
-        PASSWORD,
         ENTER_GAME_TIMER,
         DELAY_MULTIPLIER,
         RECORD_PROGRESS,
@@ -50,7 +45,6 @@ object GlobalSettings {
         CREATE_PREFIX,
         ADD_SUFFIX_SETTING,
         CREATE_GEM_BUILD,
-        GEM_COUNT,
         AFTER_KICK_OPTION,
         DEVICE_REMARK,
         RUNTIME_SCREENSHOT

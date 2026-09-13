@@ -1,13 +1,3 @@
-#[cfg(not(debug_assertions))]
-use crate::auth::last_time::mono_millis;
-use crate::security::anti_debug::G_SECURITY_POISON_FLAG;
-use crate::security::anti_debug::G_SECURITY_POISON_FLAG_2;
-use crate::security::anti_debug::G_SECURITY_POISON_FLAG_3;
-#[cfg(not(debug_assertions))]
-use crate::security::anti_debug::MONITOR_HEARTBEAT;
-use rand::Rng;
-use std::sync::atomic::Ordering;
-
 pub mod multi_colors;
 pub mod multi_colors_raw;
 
@@ -51,68 +41,33 @@ where
     x2 = x2.min(width - 1);
     y2 = y2.min(height - 1);
 
-    // Run the real search (preserves normal execution timing to defeat timing attacks)
-    let real_result = {
-        let mut found: Option<(i32, i32)> = None;
-        if direction == 1 {
-            // From bottom-right to top-left
-            'outer_rev: for y in (y1..=y2).rev() {
-                for x in (x1..=x2).rev() {
-                    let pixel = get_pixel(x, y);
-                    if is_color_match(pixel, main_color, threshold) {
-                        if check_offsets(x, y, width, height, threshold, offsets_arr, &get_pixel) {
-                            found = Some((x, y));
-                            break 'outer_rev;
-                        }
-                    }
-                }
-            }
-        } else {
-            // Default: From top-left to bottom-right (direction 0 or any other)
-            'outer: for y in y1..=y2 {
-                for x in x1..=x2 {
-                    let pixel = get_pixel(x, y);
-                    if is_color_match(pixel, main_color, threshold) {
-                        if check_offsets(x, y, width, height, threshold, offsets_arr, &get_pixel) {
-                            found = Some((x, y));
-                            break 'outer;
-                        }
+    if direction == 1 {
+        // From bottom-right to top-left
+        for y in (y1..=y2).rev() {
+            for x in (x1..=x2).rev() {
+                let pixel = get_pixel(x, y);
+                if is_color_match(pixel, main_color, threshold) {
+                    if check_offsets(x, y, width, height, threshold, offsets_arr, &get_pixel) {
+                        return Some((x, y));
                     }
                 }
             }
         }
-        found
-    };
-
-    // Monitor liveness guard — if the security thread has stopped, treat as tamper
-    #[cfg(not(debug_assertions))]
-    {
-        let hb = MONITOR_HEARTBEAT.load(Ordering::SeqCst);
-        if hb > 0 {
-            let now = mono_millis();
-            if now - hb > 60_000 {
-                G_SECURITY_POISON_FLAG.store((now as i32) | 1, Ordering::SeqCst);
-                G_SECURITY_POISON_FLAG_2.store((now as i32) | 1, Ordering::SeqCst);
-                G_SECURITY_POISON_FLAG_3.fetch_add(10, Ordering::SeqCst);
+    } else {
+        // Default: From top-left to bottom-right (direction 0 or any other)
+        for y in y1..=y2 {
+            for x in x1..=x2 {
+                let pixel = get_pixel(x, y);
+                if is_color_match(pixel, main_color, threshold) {
+                    if check_offsets(x, y, width, height, threshold, offsets_arr, &get_pixel) {
+                        return Some((x, y));
+                    }
+                }
             }
         }
     }
 
-    // Tamper sabotage — discard real result, return deterministic fake position
-    let poison1 = G_SECURITY_POISON_FLAG.load(Ordering::SeqCst);
-    let poison2 = G_SECURITY_POISON_FLAG_2.load(Ordering::SeqCst);
-    let poison3 = G_SECURITY_POISON_FLAG_3.load(Ordering::SeqCst);
-
-    if poison1 != 0 || poison2 != 0 || poison3 >= 3 {
-        let range_x = (x2 - x1).max(1);
-        let range_y = (y2 - y1).max(1);
-        let mut rng = rand::thread_rng();
-        let fake_x = x1 + (rng.gen::<u32>() as i32 % range_x);
-        let fake_y = y1 + (rng.gen::<u32>() as i32 % range_y);
-        return Some((fake_x, fake_y));
-    }
-
-    real_result
+    None
 }
 
 #[inline(always)]

@@ -21,3 +21,8 @@ When importing a class/object/function or others, you should import the full pac
 For example, instead of using com.coc.zkqcode.jar.code.colorschema.ColorSchema in the code, you should import it as import com.coc.zkqcode.jar.code.colorschema.ColorSchema. Then, you can use ColorSchema in the code as ColorSchema.
 
 When the instructions are unclear, you need to ask the user for clarification. Only proceed after you have understood every detail of the instructions.
+
+Debug Environment Rules
+Emulator: Always use emulator-5556 for adb commands (screencap, input tap, install, etc.). Specify -s emulator-5556 when needed.
+
+Modification Rules: Only modify the specified feature. Do not make extra changes. Only provide suggestions without implementing them unless asked.

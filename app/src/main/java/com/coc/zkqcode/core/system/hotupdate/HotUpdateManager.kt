@@ -6,7 +6,6 @@ import android.os.Looper
 import com.coc.zkqcode.BuildConfig
 import com.coc.zkqcode.core.data.database.GlobalVars
 import com.coc.zkqcode.core.util.basic.ShowMessage
-import com.coc.zkqcode.core.util.crypto.solvePoW
 import com.coc.zkqcode.core.util.fileactions.LogHelper
 import com.coc.zkqcode.loadjar.Loadjar
 import com.coc.zkqcode.statehelper.AppMode
@@ -18,10 +17,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.File
 import java.security.MessageDigest
@@ -142,17 +139,7 @@ object HotUpdateManager {
             return@withTimeout
         }
 
-        // --- Step C: Download with PoW authentication, retry up to MAX_RETRY times ---
-        val email = GlobalVars.configStates["email"]?.value.orEmpty()
-        val password = GlobalVars.configStates["password"]?.value.orEmpty()
-        if (email.isBlank() || password.isBlank()) {
-            repeat(5) {
-                ShowMessage("请登录账号后，再使用自动更新\n(自动更新可免费使用，仅需登录即可)")
-                delay(2000)
-            }
-            return@withTimeout
-        }
-
+        // --- Step C: Download the new JAR, retry up to MAX_RETRY times ---
         val targetFile = File(assetsDir, serverFileName)
         // Download to a temp file first to avoid leaving a corrupt JAR on network failure
         val tempFile = File(assetsDir, "${serverFileName}.tmp")
@@ -161,19 +148,7 @@ object HotUpdateManager {
         for (attempt in 1..MAX_RETRY) {
             ShowMessage("检测到新版 (服务器版本号=$serverVersion, 本地版本号=$localVersion)\n下载中，第$attempt/$MAX_RETRY 次尝试")
             try {
-                // Fetch PoW challenge (nonce valid for 10s, single-use)
-                val powNonce = fetchPowNonce(baseUrl)
-                val powSalt = solvePoW(powNonce)
-
-                // Build JSON request body for download endpoint
-                val jsonBody = JSONObject().apply {
-                    put("email", email)
-                    put("password", password)
-                    put("powNonce", powNonce)
-                    put("powSalt", powSalt)
-                }
-                val requestBody = jsonBody.toString().toRequestBody("application/json".toMediaTypeOrNull())
-                val downloadRequest = Request.Builder().url("${baseUrl}api/hot-update-download").post(requestBody).build()
+                val downloadRequest = Request.Builder().url("${baseUrl}api/hot-update-download").get().build()
 
                 // Stream response bytes to temp file with progress reporting
                 withContext(Dispatchers.IO) {
@@ -302,22 +277,6 @@ object HotUpdateManager {
         } else {
             "下载中: ${dlKB}KB"
         }
-    }
-
-    /**
-     * Fetches a fresh PoW nonce from the server challenge endpoint.
-     */
-    private suspend fun fetchPowNonce(baseUrl: String): String {
-        val request = Request.Builder().url("${baseUrl}api/pow/challenge").get().build()
-        val responseStr = withContext(Dispatchers.IO) {
-            httpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    throw IllegalStateException("PoW challenge failed: ${response.code}")
-                }
-                response.body.string()
-            }
-        }
-        return JSONObject(responseStr).getString("nonce")
     }
 
     /**

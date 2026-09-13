@@ -9,19 +9,7 @@ import android.os.IBinder
 import android.view.Gravity
 import android.view.WindowManager
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -31,20 +19,13 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
@@ -62,24 +43,12 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
-import com.coc.zkqcode.core.ui.localcomponents.LocalCustomButton
-import com.coc.zkqcode.core.util.exit.AppExitHelper
 import timber.log.Timber
 import java.util.concurrent.atomic.AtomicBoolean
 
 // Lightweight message payload for in-process delivery via SharedFlow
 data class MessageData(
     val text: String, val x: Int, val y: Int, val fontSize: Float, val duration: Long
-)
-
-// Ad item from the server API
-data class AdItem(
-    val content: String, val link: String?, val topAd: Int
-)
-
-// Payload carrying ad items and the display duration for the overlay
-data class AdOverlayData(
-    val items: List<AdItem>, val durationSeconds: Int
 )
 
 class MessageBoxService : Service(), LifecycleOwner, SavedStateRegistryOwner {
@@ -92,11 +61,6 @@ class MessageBoxService : Service(), LifecycleOwner, SavedStateRegistryOwner {
 
         // In-process message channel; extraBufferCapacity ensures tryEmit() never fails
         val messageFlow = MutableSharedFlow<MessageData>(
-            extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST
-        )
-
-        // Ad overlay channel; null signals dismiss
-        val adFlow = MutableSharedFlow<AdOverlayData?>(
             extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST
         )
     }
@@ -125,13 +89,6 @@ class MessageBoxService : Service(), LifecycleOwner, SavedStateRegistryOwner {
     // To handle multiple concurrent requests or updates, we might need a trigger
     private var showTrigger by mutableLongStateOf(0L)
 
-    // --- Ad overlay state (second window, independent of debug messages) ---
-    private var adComposeView: ComposeView? = null
-    private var adItems by mutableStateOf<List<AdItem>>(emptyList())
-    private var isAdVisible by mutableStateOf(false)
-    private var adDurationSeconds by mutableIntStateOf(15)
-    private var adCountdown by mutableIntStateOf(15)
-
     override fun onCreate() {
         super.onCreate()
         // Must call startForeground() before anything else to satisfy the
@@ -146,22 +103,6 @@ class MessageBoxService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         serviceScope.launch {
             messageFlow.collect { msg ->
                 applyMessage(msg)
-            }
-        }
-
-        // Collect ad overlay show/dismiss signals
-        serviceScope.launch {
-            adFlow.collect { data ->
-                if (data != null) {
-                    adItems = data.items.sortedByDescending { it.topAd }
-                    adDurationSeconds = data.durationSeconds
-                    adCountdown = data.durationSeconds
-                    isAdVisible = true
-                    showAdWindow()
-                } else {
-                    isAdVisible = false
-                    removeAdWindow()
-                }
             }
         }
 
@@ -185,14 +126,11 @@ class MessageBoxService : Service(), LifecycleOwner, SavedStateRegistryOwner {
     }
 
     // Cancel and restart the inactivity timer; service stops after INACTIVITY_TIMEOUT_MS of silence.
-    // While the ad overlay is visible, skip self-stop to keep the service alive.
     private fun resetInactivityTimer() {
         inactivityJob?.cancel()
         inactivityJob = serviceScope.launch {
             delay(INACTIVITY_TIMEOUT_MS)
-            if (!isAdVisible) {
-                stopSelf()
-            }
+            stopSelf()
         }
     }
 
@@ -275,174 +213,6 @@ class MessageBoxService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         }
     }
 
-    // --- Ad overlay window management ---
-
-    private fun showAdWindow() {
-        if (adComposeView != null) return
-
-        val windowType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        } else {
-            @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE
-        }
-
-        val displayMetrics = resources.displayMetrics
-        val adParams = WindowManager.LayoutParams(
-            displayMetrics.widthPixels, WindowManager.LayoutParams.WRAP_CONTENT, windowType,
-            // Focusable so links are clickable (no FLAG_NOT_FOCUSABLE)
-            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN, PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.CENTER
-            windowAnimations = 0
-        }
-
-        adComposeView = ComposeView(this).apply {
-            setViewTreeLifecycleOwner(this@MessageBoxService)
-            setViewTreeSavedStateRegistryOwner(this@MessageBoxService)
-
-            setContent {
-                AdOverlayContent()
-            }
-        }
-
-        try {
-            windowManager.addView(adComposeView, adParams)
-        } catch (e: Exception) {
-            Timber.e(e, "MessageBoxService: showAdWindow() failed")
-            adComposeView = null
-        }
-    }
-
-    private fun removeAdWindow() {
-        if (adComposeView != null) {
-            try {
-                windowManager.removeViewImmediate(adComposeView)
-            } catch (_: IllegalArgumentException) {
-                // View not attached
-            }
-            adComposeView = null
-        }
-    }
-
-    @Composable
-    private fun AdOverlayContent() {
-        val context = LocalContext.current
-        // Cap the overlay height at 95% of screen to prevent overflow on long ad lists
-        // Use LocalWindowInfo for accurate container dimensions instead of system config
-        val screenHeightDp = with(LocalDensity.current) {
-            LocalWindowInfo.current.containerSize.height.toDp()
-        }
-        // Countdown timer that ticks every second using dynamic duration
-        LaunchedEffect(isAdVisible, adDurationSeconds) {
-            if (isAdVisible) {
-                for (remaining in adDurationSeconds downTo 1) {
-                    adCountdown = remaining
-                    delay(1000L)
-                }
-                adCountdown = 0
-            }
-        }
-
-        if (isAdVisible) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = screenHeightDp * 0.95f)
-                    .background(Color(0xCC000000)),
-                contentAlignment = Alignment.Center
-            ) {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth(0.9f)
-                        .padding(vertical = 24.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    color = Color.White,
-                    shadowElevation = 8.dp
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = "广告剩余: ${adCountdown}秒",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.Black,
-                            modifier = Modifier.padding(bottom = 4.dp)
-                        )
-
-                        // Use weight so the list flexes within the height-constrained parent
-                        AdList(context)
-
-                        HorizontalDivider(
-                            modifier = Modifier.padding(vertical = 4.dp),
-                            color = Color.LightGray
-                        )
-
-                        Text(
-                            text = "官网注册账号并赞助，可以免广告。每天仅需0.25卡班积分，用多久扣多少，精确到分钟。\n\n免费用户不限制多开数量，但多开超过2个账号后广告时间会成比例增加。广告播放时，只能退出辅助或等待，不能进行其他操作。",
-                            fontSize = 8.sp,
-                            color = Color.Gray,
-                            modifier = Modifier.align(Alignment.CenterHorizontally)
-                        )
-
-                        // Exit button to let users quit the app during ad playback
-                        LocalCustomButton(
-                            text = "退出辅助",
-                            onClick = { AppExitHelper.exitApplication(context) }
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    // Extracted ad list into a ColumnScope extension so weight() modifier is available
-    @Composable
-    private fun ColumnScope.AdList(context: android.content.Context) {
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f, fill = false),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            items(adItems) { item ->
-                if (item.link != null) {
-                    Text(
-                        text = item.content,
-                        fontSize = 13.sp,
-                        color = Color(0xFF2196F3),
-                        textDecoration = TextDecoration.Underline,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                try {
-                                    val intent = Intent(
-                                        Intent.ACTION_VIEW, item.link.toUri()
-                                    ).apply {
-                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    }
-                                    context.startActivity(intent)
-                                } catch (e: Exception) {
-                                    Timber.e(e, "Failed to open ad link")
-                                }
-                            }
-                            .padding(vertical = 4.dp)
-                    )
-                } else {
-                    Text(
-                        text = item.content,
-                        fontSize = 13.sp,
-                        color = Color.DarkGray,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp)
-                    )
-                }
-            }
-        }
-    }
-
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         updateForegroundRecord()
         lifecycleRegistry.currentState = Lifecycle.State.STARTED
@@ -499,7 +269,6 @@ class MessageBoxService : Service(), LifecycleOwner, SavedStateRegistryOwner {
             }
             composeView = null
         }
-        removeAdWindow()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

@@ -66,6 +66,44 @@ kotlin {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11
     }
 }
+// Read local.properties once for the custom jar tasks below.
+fun readLocalProperties(): Properties {
+    val props = Properties()
+    val file = rootProject.file("local.properties")
+    if (file.exists()) {
+        file.inputStream().use { props.load(it) }
+    }
+    return props
+}
+
+// Resolve the Android SDK: local.properties (sdk.dir) > ANDROID_HOME > ANDROID_SDK_ROOT
+fun resolveSdkDir(): String {
+    val dir = readLocalProperties().getProperty("sdk.dir")
+        ?: System.getenv("ANDROID_HOME")
+        ?: System.getenv("ANDROID_SDK_ROOT")
+        ?: throw GradleException("Android SDK not found. Set sdk.dir in local.properties or ANDROID_HOME.")
+    return dir.replace('\\', '/')
+}
+
+// Resolve a Python interpreter: local.properties (python.exe) > "py" launcher > "python" on PATH
+fun resolvePythonExe(): String {
+    readLocalProperties().getProperty("python.exe")?.takeIf { it.isNotBlank() }?.let { return it }
+
+    for (name in listOf("py", "python")) {
+        try {
+            val proc = ProcessBuilder(name, "-c", "import sys;print(sys.executable)")
+                .redirectErrorStream(true).start()
+            val out = proc.inputStream.bufferedReader().readText().trim()
+            if (proc.waitFor() == 0 && out.isNotEmpty() && File(out).exists()) {
+                return out
+            }
+        } catch (_: Exception) {
+            // Try the next candidate
+        }
+    }
+    throw GradleException("No Python interpreter found. Add 'python.exe=<full path>' to local.properties.")
+}
+
 // Clean old jar class files before recompilation
 tasks.register("cleanJarClasses") {
     group = "custom"
@@ -106,7 +144,7 @@ tasks.register<Exec>("buildJar") {
 
     // --- Path configuration ---
     val workingDir = project.projectDir.absolutePath
-    val sdkDir = "C:/Users/Azikaban/AppData/Local/Android/Sdk"
+    val sdkDir = resolveSdkDir()
 
     // Auto-detect the highest installed Build-Tools version (e.g. 36.1.0)
     val buildToolsDir = file("$sdkDir/build-tools")
@@ -215,8 +253,8 @@ tasks.register<Exec>("buildJar") {
         if (outFile.exists()) {
             println("--- SUCCESS: JAR built at ${outFile.name} ---")
 
-            // Encrypt the JAR using conda base Python
-            val pythonExe = "C:/Users/Azikaban/anaconda3/python.exe"
+            // Encrypt the JAR using the auto-detected Python interpreter
+            val pythonExe = resolvePythonExe()
             val scriptPath = file("encrypt_jar.py").absolutePath
             val proc = ProcessBuilder(pythonExe, scriptPath, outFile.absolutePath)
                 .inheritIO().start()
@@ -279,7 +317,7 @@ tasks.register("uploadJar") {
             ?.firstOrNull { it.name.startsWith("encrypted_") && it.extension == "jar" }
             ?: throw GradleException("No encrypted jar found in assets directory")
 
-        val pythonExe = "C:/Users/Azikaban/anaconda3/python.exe"
+        val pythonExe = resolvePythonExe()
         val scriptPath = file("upload_jar.py").absolutePath
 
         println("Uploading ${encryptedJar.name} to hot update server...")

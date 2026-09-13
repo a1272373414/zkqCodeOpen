@@ -178,8 +178,7 @@ fun ControlWindow(
                             ControlState.COLLAPSED -> ControlState.EXPANDED
                             ControlState.EXPANDED -> ControlState.COLLAPSED
                         }
-                        // Skip auto-pause when ad is playing
-                        if (wasCollapsed && isPlaying && !GlobalVars.isAdPlaying) {
+                        if (wasCollapsed && isPlaying) {
                             ShowMessage("检测到悬浮窗展开，辅助已自动暂停，避免干扰用户操作\n为节省资源，暂停5分钟后会自动退出。", false)
                             isPlaying = false
                         }
@@ -196,11 +195,6 @@ fun ControlWindow(
                         .padding(4.dp)
                         .clickable {
                             internalInteractionCount++
-                            // Skip confirmation and exit immediately when ad is playing
-                            if (GlobalVars.isAdPlaying) {
-                                AppExitHelper.exitApplication(context)
-                                return@clickable
-                            }
                             showExitConfirmation = true
                         }
                 )
@@ -211,8 +205,6 @@ fun ControlWindow(
                         .size(iconSize)
                         .padding(4.dp)
                         .clickable {
-                            // Disable setting icon when ad is playing
-                            if (GlobalVars.isAdPlaying) return@clickable
                             internalInteractionCount++
                             AppStateManager.setMode(AppMode.Main)
                             restoreDefaultInputMethod()
@@ -226,8 +218,6 @@ fun ControlWindow(
                         .size(iconSize)
                         .padding(4.dp)
                         .clickable {
-                            // Disable switch account icon when ad is playing
-                            if (GlobalVars.isAdPlaying) return@clickable
                             internalInteractionCount++
                             AppStateManager.setMode(AppMode.SwitchAccount)
                             restoreDefaultInputMethod()
@@ -241,8 +231,6 @@ fun ControlWindow(
                         .size(iconSize)
                         .padding(4.dp)
                         .clickable {
-                            // Disable play/pause icon when ad is playing
-                            if (GlobalVars.isAdPlaying) return@clickable
                             internalInteractionCount++
                             isPlaying = !isPlaying
                             if (!isPlaying) {
@@ -263,8 +251,6 @@ fun ControlWindow(
                         .size(iconSize)
                         .padding(4.dp)
                         .clickable {
-                            // Disable play/pause icon when ad is playing
-                            if (GlobalVars.isAdPlaying) return@clickable
                             internalInteractionCount++
                             isPlaying = !isPlaying
                             if (!isPlaying) {
@@ -281,8 +267,6 @@ fun ControlWindow(
                         .size(iconSize)
                         .padding(4.dp)
                         .clickable {
-                            // Disable switch account icon when ad is playing
-                            if (GlobalVars.isAdPlaying) return@clickable
                             internalInteractionCount++
                             AppStateManager.setMode(AppMode.SwitchAccount)
                             restoreDefaultInputMethod()
@@ -296,8 +280,6 @@ fun ControlWindow(
                         .size(iconSize)
                         .padding(4.dp)
                         .clickable {
-                            // Disable setting icon when ad is playing
-                            if (GlobalVars.isAdPlaying) return@clickable
                             internalInteractionCount++
                             AppStateManager.setMode(AppMode.Main)
                             restoreDefaultInputMethod()
@@ -312,11 +294,6 @@ fun ControlWindow(
                         .padding(4.dp)
                         .clickable {
                             internalInteractionCount++
-                            // Skip confirmation and exit immediately when ad is playing
-                            if (GlobalVars.isAdPlaying) {
-                                AppExitHelper.exitApplication(context)
-                                return@clickable
-                            }
                             showExitConfirmation = true
                         }
                 )
@@ -336,8 +313,7 @@ fun ControlWindow(
                             ControlState.COLLAPSED -> ControlState.EXPANDED
                             ControlState.EXPANDED -> ControlState.COLLAPSED
                         }
-                        // Skip auto-pause when ad is playing
-                        if (wasCollapsed && isPlaying && !GlobalVars.isAdPlaying) {
+                        if (wasCollapsed && isPlaying) {
                             ShowMessage("检测到悬浮窗展开，辅助已自动暂停，避免干扰用户操作\n为节省资源，暂停5分钟后会自动退出。", false)
                             isPlaying = false
                         }

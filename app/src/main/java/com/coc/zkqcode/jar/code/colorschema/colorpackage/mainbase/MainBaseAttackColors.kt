@@ -64,8 +64,11 @@ object MainBaseAttackColors : IMainBaseAttackColors {
     override val AttackButton = ColorSchema.parse(
         1045, 624, 1245, 662, "9BFDCF", "13|-5|A1FED2,24|-4|A1FED2,16|1|9AFCCE,8|20|4EE79F,121|-5|A1FED2,140|-3|A0FED1,146|3|97FCCC,132|20|4EE79F,137|20|4EE79F", 0, 0.9, "进攻！"
     )
+    // NextOpponent: 匹配成功界面右下 "下一个 X金币" 金黄色按钮
+    // 真实颜色采样: BGR #56C5FC (RGB #FCC556) 金黄色
+    // 坐标 x:800-1060, y:550-705 (真实像素聚类范围)
     override val NextOpponent = ColorSchema.parse(
-        1072, 472, 1265, 560, "36BFFD", "18|0|36BFFD,38|0|36BFFD,44|0|36BFFD,72|1|36BFFD,-56|53|0D59E8,-53|57|0D55E6,-47|58|0D54E6,-32|68|0D50E4,-27|72|0D50E4", 0, 0.95
+        800, 550, 1060, 710, "56C5FC", "50|20|66D7FD,100|20|56C5FC,150|20|62C2FC,200|20|56C5FC,50|50|5BBBFC,100|50|56C5FC,150|50|56C5FC,200|50|52B3F5,50|100|4BAAE9,100|100|56C5FC", 0, 0.85, "下一个对手"
     )
     override val GoldColor = ColorSchema.parse(
         998, 19, 1215, 136, "0DC0E7", "0|1|0DC0E7,0|2|0DC0E7,0|3|0DC0E7,0|4|0DC0E7,0|5|0DC0E7,0|6|0DC0E7,0|7|0DC0E7", 0, 0.97,

@@ -2,8 +2,6 @@ package com.coc.zkqcode.core.util.basic
 
 import android.content.Context
 import com.coc.zkqcode.core.data.database.GlobalVars
-import com.coc.zkqcode.core.ui.floatingwindows.AdItem
-import com.coc.zkqcode.core.ui.floatingwindows.MessageBoxHelper
 import com.coc.zkqcode.core.ui.floatingwindows.MessageBoxHelper.showFloatingMessage
 import timber.log.Timber
 import java.lang.ref.WeakReference
@@ -36,17 +34,5 @@ object ShowMessage {
             }
             Timber.tag("zkq_debug").v("Verbose: $text")
         } ?: Timber.tag("zkq_debug").e("ShowMessage: Context not initialized or released, skipping message display")
-    }
-
-    // Show the ad overlay with clickable links via MessageBoxService
-    fun showAdOverlay(adItems: List<AdItem>, durationSeconds: Int) {
-        contextRef?.get()?.let { context ->
-            MessageBoxHelper.showAdOverlay(context, adItems, durationSeconds)
-        } ?: Timber.tag("zkq_debug").e("ShowMessage: Context not initialized or released, skipping ad overlay")
-    }
-
-    // Dismiss the ad overlay
-    fun dismissAdOverlay() {
-        MessageBoxHelper.dismissAdOverlay()
     }
 }

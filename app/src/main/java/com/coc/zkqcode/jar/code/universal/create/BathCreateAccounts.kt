@@ -5,7 +5,6 @@ import android.os.Environment
 import com.coc.zkqcode.core.util.basic.RunShell
 import com.coc.zkqcode.core.util.basic.ShowMessage
 import com.coc.zkqcode.core.util.fileactions.LogHelper.logAndRestart
-import com.coc.zkqcode.jar.code.auth.displayAds
 import com.coc.zkqcode.jar.code.universal.GameVersion
 import com.coc.zkqcode.jar.code.universal.InGamesVars
 import com.coc.zkqcode.jar.code.universal.smalltools.getConfigOrStop
@@ -27,7 +26,6 @@ suspend fun batchCreateAccounts() {
         // Check if the folder exists using shell command
         val exists = RunShell.runAndGetFirst("[ -d \"$path\" ] && echo true || echo false")
         if (exists != "true") {
-            displayAds()
             // Set game version and account number for AllTutorials display and checkReconnections
             InGamesVars.currentGameVersion = GameVersion.GLOBAL
             InGamesVars.currentAccountNumber = i

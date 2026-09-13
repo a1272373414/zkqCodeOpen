@@ -200,10 +200,6 @@ fun HomeScreen(
                                 CustomButton(
                                     text = "修改任意配置停止计时", onClick = { GlobalVars.isAutoRunEnabled = false })
                             }
-                            LoginScreen(
-                                onAdFreeClick = {
-                                    saveAndSetPlaying(false)
-                                })
                         }
                         SettingSection {
                             FlowRow {

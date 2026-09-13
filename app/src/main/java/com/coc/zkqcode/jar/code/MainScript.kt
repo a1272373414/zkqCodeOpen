@@ -5,8 +5,6 @@ import com.coc.zkqcode.core.util.basic.RunShell
 import com.coc.zkqcode.core.util.basic.ShowMessage
 import com.coc.zkqcode.core.util.basic.delayWithMultiplier
 import com.coc.zkqcode.core.util.basic.waitForPlay
-import com.coc.zkqcode.jar.code.auth.displayAds
-import com.coc.zkqcode.jar.code.auth.userAuth
 import com.coc.zkqcode.jar.code.builderbase.playBuilderBase
 import com.coc.zkqcode.jar.code.mainbase.playMainBase
 import com.coc.zkqcode.jar.code.universal.GameVersion
@@ -34,7 +32,6 @@ suspend fun runMainScript() {
     waitForPlay()
     ShowMessage("检测到设置已更新\n即将重新运行")
     delay(200)
-    userAuth()
     // Read hot update preference and emit signal if "OnStart" mode is selected
     val updateOption = getConfigOrStop(Schema.GLOBAL_SETTINGS.AUTO_UPDATE.key).toIntOrNull() ?: 0
     if (updateOption == 1 || updateOption == 2) {
@@ -74,7 +71,6 @@ suspend fun runMainScript() {
             getConfigOrStop("${Schema.ACCOUNT_SETTINGS.GAME_VERSION.key}${InGamesVars.currentAccountNumber}").toIntOrNull() ?: logAndRestart("${Schema.ACCOUNT_SETTINGS.GAME_VERSION.displayName} 必须是数字，请检查配置")
         )
     }
-    InGamesVars.adTime = 10.coerceAtLeast(accountTotal * 8)
     batchCreateAccounts()//Create all needed accounts first.
     // Track elapsed time for periodic hot update checks (updateOption 2)
     var lastUpdateCheckTime = System.currentTimeMillis()
@@ -82,7 +78,6 @@ suspend fun runMainScript() {
     while (currentCoroutineContext().isActive) {
 //        runTestCode()
 
-        displayAds()
         RunShell.runNoOutput("am kill-all")//clean up memory
         // Use labeled block to skip remaining steps on failure
         run stepBlock@{

@@ -43,7 +43,6 @@ fun CheckRootScreen() {
 
     // 使用 LaunchedEffect 监听并检测
     LaunchedEffect(Unit) {
-        CheckIntergrity.checkAppIntegrity(context)
         Shell.cmd("adb shell input keyevent 4").exec()
         status = PermissionManager.checkAndGrantPermissions(context) { newStatus ->
             status = newStatus
