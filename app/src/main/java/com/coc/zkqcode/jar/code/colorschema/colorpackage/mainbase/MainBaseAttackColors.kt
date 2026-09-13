@@ -64,11 +64,13 @@ object MainBaseAttackColors : IMainBaseAttackColors {
     override val AttackButton = ColorSchema.parse(
         1045, 624, 1245, 662, "9BFDCF", "13|-5|A1FED2,24|-4|A1FED2,16|1|9AFCCE,8|20|4EE79F,121|-5|A1FED2,140|-3|A0FED1,146|3|97FCCC,132|20|4EE79F,137|20|4EE79F", 0, 0.9, "进攻！"
     )
-    // NextOpponent: 匹配成功界面右下 "下一个 X金币" 金黄色按钮
-    // 真实颜色采样: BGR #56C5FC (RGB #FCC556) 金黄色
-    // 坐标 x:800-1060, y:550-705 (真实像素聚类范围)
+    // NextOpponent: "下一个 X金币" button, bottom-right of the match-found screen (1280x720)
+    // Real pixel sampling (2026-09-13): button bounds x:1065-1267, y:467-556
+    // Two-tone gradient: top band golden #FFCB4C, bottom band orange #F57626 (BGR 2676F5)
+    // Offsets use three stable horizontal bands (y=479/517/549) on the left/middle of the
+    // button only — the right side (coin icon + dynamic gold cost digits) is never sampled.
     override val NextOpponent = ColorSchema.parse(
-        800, 550, 1060, 710, "56C5FC", "50|20|66D7FD,100|20|56C5FC,150|20|62C2FC,200|20|56C5FC,50|50|5BBBFC,100|50|56C5FC,150|50|56C5FC,200|50|52B3F5,50|100|4BAAE9,100|100|56C5FC", 0, 0.85, "下一个对手"
+        1063, 465, 1270, 558, "2676F5", "70|12|4CCBFF,120|12|4CCBFF,170|12|4CCBFF,70|50|2676F5,120|50|2676F5,70|82|2274F5,120|82|2274F5", 0, 0.85, "下一个对手"
     )
     override val GoldColor = ColorSchema.parse(
         998, 19, 1215, 136, "0DC0E7", "0|1|0DC0E7,0|2|0DC0E7,0|3|0DC0E7,0|4|0DC0E7,0|5|0DC0E7,0|6|0DC0E7,0|7|0DC0E7", 0, 0.97,
