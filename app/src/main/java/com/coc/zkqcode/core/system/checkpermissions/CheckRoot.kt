@@ -26,7 +26,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.coc.zkqcode.MainActivity
 import com.coc.zkqcode.core.data.database.GlobalVars
 import com.coc.zkqcode.core.data.websocket.ServerActions
 import com.coc.zkqcode.core.data.websocket.ServerConnection
@@ -109,7 +108,11 @@ fun CheckRootScreen() {
                 // Start the floating window service AFTER serverActions is ready
                 val serviceIntent = Intent(context, UIWindowService::class.java)
                 context.startService(serviceIntent)
-                (context as? MainActivity)?.requestMediaProjection()
+                // Skip the MediaProjection consent dialog: on this emulator it gets
+                // killed by the system within ~0.8s before any user interaction, so
+                // projection is never granted anyway. Screen capture works through the
+                // root shell screencap path (ShellScreenCapture) that ScreenCaptureManager
+                // falls back to automatically.
             }
             Column(
                 modifier = Modifier.fillMaxSize(),
