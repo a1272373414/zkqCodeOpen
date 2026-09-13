@@ -34,7 +34,8 @@ object TextRecognizer {
         threshold: Int = 140,
         saveImage: Boolean = false,
         applyPreprocess: Boolean = true,
-        invertBinarization: Boolean = true
+        invertBinarization: Boolean = true,
+        scale: Float = 1f
     ): List<RecognizedText> {
         val screenBuffer = ScreenCaptureManager.capture(asBitmap = true) as? Bitmap
             ?: logAndRestart("in TextRecognizer, screen capture failed.")
@@ -60,13 +61,26 @@ object TextRecognizer {
                     croppedBitmap
                 }
 
+                // 2.0 [Small text optimization] Upscale the bitmap before OCR when requested,
+                //     because ML Kit struggles with glyphs smaller than ~20px (e.g. subtitles)
+                val finalBitmap = if (scale != 1f) {
+                    Bitmap.createScaledBitmap(
+                        bitmapToRecognize,
+                        (bitmapToRecognize.width * scale).toInt().coerceIn(1, 4096),
+                        (bitmapToRecognize.height * scale).toInt().coerceIn(1, 4096),
+                        true
+                    )
+                } else {
+                    bitmapToRecognize
+                }
+
                 // 2.1 Save the image if requested
                 if (saveImage) {
                     ScreenCaptureManager.getContext()?.let { context ->
                         try {
                             val file = File(context.filesDir, "test.png")
                             FileOutputStream(file).use { out ->
-                                bitmapToRecognize.compress(Bitmap.CompressFormat.PNG, 100, out)
+                                finalBitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
                             }
                             showDebugInfo("Image saved to: ${file.absolutePath}")
                         } catch (e: Exception) {
@@ -76,7 +90,7 @@ object TextRecognizer {
                 }
 
                 // 3. Recognize the image
-                return recognizeTextSync(bitmapToRecognize, useChinese)
+                return recognizeTextSync(finalBitmap, useChinese)
             } else {
                 return emptyList()
             }
