@@ -13,6 +13,12 @@ interface IMainBaseHeroHallColors {
     val SmithOreIcon: ColorSchema
     val PetsIconInHeroHall: ColorSchema
     val PetsShopInnerBanner: ColorSchema
+
+    // Migrated from the legacy freescript UI lookup table (函数275a).
+    // Note: the hero hall building itself is NOT located with a fixed-region color schema,
+    // because its position depends on the base layout and it can be partially occluded
+    // inside a building cluster. It is located by YOLO instead (see HeroHallHelper).
+    val EquipmentButton: ColorSchema
 }
 
 object MainBaseHeroHallColors : IMainBaseHeroHallColors {
@@ -47,5 +53,16 @@ object MainBaseHeroHallColors : IMainBaseHeroHallColors {
     // Top banner inside the pet shop page
     override val PetsShopInnerBanner = ColorSchema.parse(
         356, 34, 929, 77, "5F6F00", "115|0|5F6F00,230|0|5F6F00,344|0|5F6F00,459|0|5F6F00,0|21|5F6F00,115|21|5F6F00,230|21|5F6F00,344|21|5F6F00,459|21|5F6F00", 0, 0.9, "战宠小屋顶部横幅"
+    )
+
+    // --- Migrated from the legacy freescript UI lookup table (函数275a) ---
+    // The legacy script matches on the 720x1280 portrait framebuffer while this project
+    // matches on 1280x720 landscape screenshots, so every region and offset point was
+    // rotated by 90 degrees:  x' = y, y' = 719 - x,  offset (dx, dy) -> (dy, -dx).
+    // Equipment panel entry
+    override val EquipmentButton = ColorSchema.parse(
+        1059, 12, 1185, 78, "2722F0-101010",
+        "8|0|FBFBFB-101010,18|1|FBFBFB-101010,25|0|2722F0-101010,26|-12|807DF9-101010,18|-13|FFFFFF-101010,8|-11|FFFFFF-101010,0|-11|7B78F8-101010",
+        0, 0.9, "装备界面"
     )
 }

@@ -22,6 +22,9 @@ interface IMainBaseTraining {
     val GrayBarbarian: ColorSchema
     val TrainLighteningSpell: ColorSchema
     val TrainSiegeMachine: ColorSchema
+
+    // Migrated from the legacy freescript UI lookup table (函数275a)
+    val ArmyButton: ColorSchema
 }
 
 object MainBaseTraining : IMainBaseTraining {
@@ -72,5 +75,16 @@ object MainBaseTraining : IMainBaseTraining {
     )
     override val TrainSiegeMachine = ColorSchema.parse(
         82, 509, 198, 567, "2B2D7F", "23|0|292E8C,46|0|404BBD,69|0|254687,92|0|111243,0|29|212053,23|29|191E68,46|29|181A4B,69|29|2C57A9,92|29|325595", 0, 0.9, "训练攻城机器"
+    )
+
+    // --- Migrated from the legacy freescript UI lookup table (函数275a) ---
+    // The legacy script matches on the 720x1280 portrait framebuffer while this project
+    // matches on 1280x720 landscape screenshots, so every region and offset point was
+    // rotated by 90 degrees:  x' = y, y' = 719 - x,  offset (dx, dy) -> (dy, -dx).
+    // Army panel entry
+    override val ArmyButton = ColorSchema.parse(
+        1117, 11, 1265, 90, "1A15D1-101010",
+        "6|-9|FAF6F6-101010,26|1|1F19CF-101010,19|-11|FAF6F6-101010,0|-19|7B74FF-101010,-1|-13|1511EC-101010,13|-19|FFFFFF-101010,25|-17|736DFF-101010,28|-13|1511EC-101010",
+        0, 0.9, "军队界面"
     )
 }

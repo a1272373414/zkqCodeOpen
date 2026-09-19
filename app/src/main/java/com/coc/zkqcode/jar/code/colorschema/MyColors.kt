@@ -34,16 +34,33 @@ import com.coc.zkqcode.jar.code.colorschema.colorpackage.mainbase.IMainBaseAttac
 import com.coc.zkqcode.jar.code.colorschema.colorpackage.mainbase.MainBaseAttackColors
 import com.coc.zkqcode.jar.code.colorschema.colorpackage.clancapital.ClanCapitalTutorialColors
 import com.coc.zkqcode.jar.code.colorschema.colorpackage.clancapital.IClanCapitalTutorialColors
+import com.coc.zkqcode.jar.code.colorschema.colorpackage.clancapital.CapitalTroopColors
+import com.coc.zkqcode.jar.code.colorschema.colorpackage.clancapital.ICapitalTroopColors
+import com.coc.zkqcode.jar.code.colorschema.colorpackage.clancapital.CapitalArmyColors
+import com.coc.zkqcode.jar.code.colorschema.colorpackage.clancapital.ICapitalArmyColors
 import com.coc.zkqcode.jar.code.colorschema.colorpackage.mainbase.IMainBaseClanColors
 import com.coc.zkqcode.jar.code.colorschema.colorpackage.mainbase.IMainBaseHeroHallColors
 import com.coc.zkqcode.jar.code.colorschema.colorpackage.mainbase.MainBaseClanColors
 import com.coc.zkqcode.jar.code.colorschema.colorpackage.mainbase.MainBaseHeroHallColors
+import com.coc.zkqcode.jar.code.colorschema.colorpackage.mainbase.IMainBaseBuildButtonColors
+import com.coc.zkqcode.jar.code.colorschema.colorpackage.mainbase.MainBaseBuildButtonColors
+import com.coc.zkqcode.jar.code.colorschema.colorpackage.mainbase.IMainBaseTroopColors
+import com.coc.zkqcode.jar.code.colorschema.colorpackage.mainbase.MainBaseTroopColors
+import com.coc.zkqcode.jar.code.colorschema.colorpackage.mainbase.IMainBaseBlackElixirTroopColors
+import com.coc.zkqcode.jar.code.colorschema.colorpackage.mainbase.MainBaseBlackElixirTroopColors
+import com.coc.zkqcode.jar.code.colorschema.colorpackage.builderbase.IBuilderBaseBuildButtonColors
+import com.coc.zkqcode.jar.code.colorschema.colorpackage.builderbase.BuilderBaseBuildButtonColors
 
 object MyColors : IUIColors by UIColors, IFeatureColors by FeatureColors, IMainBaseTutorial by MainBaseTutorial, IBuilderBaseTutorial by BuilderBaseTutorial, IMainBaseTraining by MainBaseTraining,
     IBuilderBaseResourcesColors by BuilderBaseResourcesColors, IBuilderBaseObstaclesRemovalColors by BuilderBaseObstaclesRemovalColors, IBuilderBaseTrainingColors by BuilderBaseTrainingColors,
     IBuilderBaseUpgradeColors by BuilderBaseUpgradeColors, IBuilderBaseResearchColors by BuilderBaseResearchColors, IBuilderBaseAttackColors by BuilderBaseAttackColors, IUniversalUpgradeColors by UniversalUpgradeColors,
     IMainBaseUpgradeColors by MainBaseUpgradeColors, IMainBaseResearchColors by MainBaseResearchColors, IMainBaseResearchLevelColors by MainBaseResearchLevelColors,
-    IClanCapitalTutorialColors by ClanCapitalTutorialColors, IMainBaseAttackColors by MainBaseAttackColors, IMainBaseClanColors by MainBaseClanColors, IMainBaseHeroHallColors by MainBaseHeroHallColors {
+    IClanCapitalTutorialColors by ClanCapitalTutorialColors, IMainBaseAttackColors by MainBaseAttackColors, IMainBaseClanColors by MainBaseClanColors, IMainBaseHeroHallColors by MainBaseHeroHallColors,
+    ICapitalTroopColors by CapitalTroopColors, ICapitalArmyColors by CapitalArmyColors,
+    IMainBaseTroopColors by MainBaseTroopColors,
+    IMainBaseBlackElixirTroopColors by MainBaseBlackElixirTroopColors,
+    IMainBaseBuildButtonColors by MainBaseBuildButtonColors,
+    IBuilderBaseBuildButtonColors by BuilderBaseBuildButtonColors {
     //Main Base Pets Colors
     val Lassi = ColorSchema.parse(
         175, 385, 1110, 665, "FA51FA", "15|-34|CEA79B,37|-33|AA604D,55|-7|4E322D,81|-6|694337,88|-57|DF6B8F,93|-75|FF85FF,135|-55|834D3F,135|-28|E88E6D,116|-17|C06350", 0, 0.9, "莱希"

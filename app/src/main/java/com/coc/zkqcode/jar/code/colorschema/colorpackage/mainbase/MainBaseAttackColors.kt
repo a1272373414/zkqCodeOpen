@@ -55,6 +55,13 @@ interface IMainBaseAttackColors {
 
     // Event reward popup title ribbon — settlement variant (ribbon shifted down, y:175-217)
     val RewardPopupTitle2: ColorSchema
+
+    // Migrated from the legacy freescript UI lookup table (函数275a) — battle screens
+    val GiveUpButton: ColorSchema
+    val ClanGamesEntry: ColorSchema
+    val VictoryStar: ColorSchema
+    val VictoryStar2: ColorSchema
+    val VictoryStar3: ColorSchema
 }
 
 object MainBaseAttackColors : IMainBaseAttackColors {
@@ -226,5 +233,41 @@ object MainBaseAttackColors : IMainBaseAttackColors {
     // Offsets verified on the settlement screenshot.
     override val RewardPopupTitle2 = ColorSchema.parse(
         410, 170, 426, 222, "2C2C9F", "42|8|21217A,74|8|282893,10|20|21217C,74|20|2B2C9F,74|32|292991", 0, 0.85, "选择一项奖励-结算"
+    )
+
+    // --- Migrated from the legacy freescript UI lookup table (函数275a) ---
+    // The legacy script matches on the 720x1280 portrait framebuffer while this project
+    // matches on 1280x720 landscape screenshots, so every region and offset point was
+    // rotated by 90 degrees:  x' = y, y' = 719 - x,  offset (dx, dy) -> (dy, -dx).
+    // Give up / surrender button shown during a battle
+    override val GiveUpButton = ColorSchema.parse(
+        11, 502, 223, 572, "635dfa-101010",
+        "-56|-4|645dfc-101010,-57|14|5d5dec-101010,-57|20|0e0dcf-101010,-53|28|0e0dd3-101010,-16|28|0e0dd3-101010,13|28|0e0dd3-101010",
+        0, 0.9, "放弃按钮"
+    )
+    // Clan games (weekend event) entry. Re-derived: the entry icon now sits at the top-right
+    // of the event/friendly-battle config screen (found at ~1143,136 on 友谊战-配置页).
+    override val ClanGamesEntry = ColorSchema.parse(
+        1090, 90, 1200, 220, "1D21E4-101010",
+        "10|0|2121E5-101010,5|-2|1F1DEC-101010,3|-17|F6F9F6-101010,7|-17|F6F9F6-101010,4|-20|FFFFFF-101010,-21|-20|1E1DF5-101010,30|-15|1E1DF5-101010",
+        0, 0.9, "竞赛界面"
+    )
+    // Victory star on the battle result screen
+    override val VictoryStar = ColorSchema.parse(
+        232, 300, 673, 562, "03BAF2-101010",
+        "4|-5|04C3FE-101010,9|-10|10D6FF-101010,13|-15|1BE8FF-101010,-5|-4|48DAFF-101010,1|-11|4AE7FF-101010,5|-17|4AF7FF-101010,9|-21|4CFFFF-101010",
+        0, 0.96, "胜利之星"
+    )
+    // Fallback variant 2 (the legacy script tries variants in order)
+    override val VictoryStar2 = ColorSchema.parse(
+        537, 425, 742, 706, "20C074",
+        "-1|-63|90FBE4,-29|-1|20BF72,-30|-64|92FBE4,-59|0|20C074,-60|-63|90FBE4,-85|-2|20C074,-78|-60|8CF9E2,40|-1|20BF72,42|-61|8DFAE2,70|-2|1FBD70,67|-64|92FBE5,77|-2|1FBE70,78|-63|90FBE4",
+        0, 0.9, "胜利之星"
+    )
+    // Fallback variant 3 (the legacy script tries variants in order)
+    override val VictoryStar3 = ColorSchema.parse(
+        335, 557, 584, 681, "20C074",
+        "-1|-63|90FBE4,-29|-1|20BF72,-30|-64|92FBE4,-59|0|20C074,-60|-63|90FBE4,-85|-2|20C074,-78|-60|8CF9E2,40|-1|20BF72,42|-61|8DFAE2,70|-2|1FBD70,67|-64|92FBE5,77|-2|1FBE70,78|-63|90FBE4",
+        0, 0.9, "胜利之星"
     )
 }

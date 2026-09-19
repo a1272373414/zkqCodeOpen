@@ -13,6 +13,7 @@ import com.coc.zkqcode.jar.code.universal.smalltools.StorageKeys
 import com.coc.zkqcode.jar.code.universal.smalltools.checkMemoryFile
 import com.coc.zkqcode.jar.code.universal.smalltools.getBooleanConfigRuntime
 import com.coc.zkqcode.jar.code.universal.smalltools.writeMemory
+import com.coc.zkqcode.jar.code.mainbase.MainBaseArmyRecognizer
 import com.coc.zkqcode.jar.ui.schema.Schema
 
 suspend fun mainBaseTrainTroops(): Boolean {
@@ -55,6 +56,14 @@ suspend fun mainBaseTrainTroops(): Boolean {
 
         // Train Troops Tab
         TouchActions.tap(891, 234, delayTime = 800)
+
+        // 兵种识别接入：识别当前部队配置（14 槽位）中的兵种并回报，用于核对/日志
+        runCatching {
+            val army = MainBaseArmyRecognizer.recognizeTroopNames()
+            if (army.isNotEmpty()) {
+                ShowMessage("账号${InGamesVars.currentAccountNumber}，当前部队：${army.joinToString("、")}")
+            }
+        }
 
         for (i in 1..8) {
             // Priority training check

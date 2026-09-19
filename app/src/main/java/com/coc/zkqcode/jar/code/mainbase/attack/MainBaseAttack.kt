@@ -43,7 +43,10 @@ suspend fun mainBaseAttack(): Boolean {
             ShowMessage("账号${InGamesVars.currentAccountNumber}，对战中，${"%.1f".format(remainingMinutes)}分钟后强制退出对战")
             // Dismiss the event reward popup if present (can appear 0-3 times during battle)
             if (handleRewardPopup()) continue
+            // EndBattle and GiveUpButton are two samples of the same surrender button; the
+            // migrated GiveUpButton covers a slightly wider area as a fallback.
             val endBattleButton = findMultiColors(schema = MyColors.EndBattle)
+                ?: findMultiColors(schema = MyColors.GiveUpButton)
             if (endBattleButton == null) {
                 ShowMessage("账号${InGamesVars.currentAccountNumber}，未找到放弃按钮，对战结束")
                 delayWithMultiplier(1000)

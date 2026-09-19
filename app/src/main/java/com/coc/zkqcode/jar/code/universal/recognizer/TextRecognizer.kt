@@ -161,4 +161,57 @@ object TextRecognizer {
                 emptyList()
             }
         }
+
+    /**
+     * Recognizes a region that is expected to contain only digits (and '.' '/' — e.g. troop
+     * counts like "8/12", resource bars, or the remaining army). Runs ML Kit first (better when
+     * the region may contain mixed text), then falls back to the offline [PixelFontOcr] whenever
+     * ML Kit yields no digit — small in-game numbers are exactly where ML Kit is least reliable.
+     *
+     * The returned string keeps every recognized character; callers that need a number should
+     * parse it (e.g. `Regex("\\d+")`).
+     */
+    suspend fun recognizeDigits(
+        startX: Int,
+        startY: Int,
+        endX: Int,
+        endY: Int,
+        useChinese: Boolean = false,
+        fallbackToPixelFont: Boolean = true,
+        // ML Kit options
+        threshold: Int = 140,
+        saveImage: Boolean = false,
+        applyPreprocess: Boolean = true,
+        invertBinarization: Boolean = true,
+        scale: Float = 1f,
+        // PixelFontOcr options
+        grayMin: Int = 200,
+        grayMax: Int = 255,
+        maxSaturation: Int = 50,
+        minSimilarity: Double = 0.75,
+        sizeTolerance: Int = 2,
+        maxGlyphSize: Int = 50,
+        waitForPlay: Boolean = false
+    ): String {
+        val mlkit = try {
+            recognize(
+                startX, startY, endX, endY, useChinese,
+                threshold, saveImage, applyPreprocess, invertBinarization, scale
+            )
+        } catch (e: Exception) {
+            emptyList()
+        }
+        val mlkitText = mlkit.joinToString("") { it.text }
+        if (mlkitText.any { it.isDigit() }) {
+            return mlkitText
+        }
+        if (fallbackToPixelFont) {
+            PixelFontOcr.recognizeDigits(
+                startX, startY, endX, endY,
+                grayMin, grayMax, maxSaturation, minSimilarity, sizeTolerance, maxGlyphSize,
+                waitForPlay
+            )?.let { return it }
+        }
+        return mlkitText
+    }
 }

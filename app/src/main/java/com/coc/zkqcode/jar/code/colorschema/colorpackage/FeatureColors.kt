@@ -13,6 +13,16 @@ interface IFeatureColors {
     val ResearchIcon2: ColorSchema
     val WhiteNumberColor: ColorSchema
     val MiddleGreenConfirm: ColorSchema
+
+    // Migrated from the legacy freescript UI lookup table (函数275a)
+    val BottomLeftReturnToCamp: ColorSchema
+    val ReturnToCampMain: ColorSchema
+    val ReturnToCampMain2: ColorSchema
+    val ReturnToCampMain3: ColorSchema
+    val ReturnToCampMain4: ColorSchema
+    val ReturnToCampMain5: ColorSchema
+    val ReturnToCampBuilder: ColorSchema
+    val CommonDialog: ColorSchema
 }
 
 object FeatureColors : IFeatureColors {
@@ -39,5 +49,61 @@ object FeatureColors : IFeatureColors {
     )
     override val MiddleGreenConfirm = ColorSchema.parse(
         546, 427, 743, 501, "75F4D6", "39|0|75F4D6,79|0|75F4D6,118|0|74F4D6,157|0|74F4D6,0|37|20BE6F,39|37|20BE6F,79|37|20BE6F,118|37|20BE6F,157|37|1FBE6F", 0, 0.9, "中绿确认按钮"
+    )
+
+    // --- Migrated from the legacy freescript UI lookup table (函数275a) ---
+    // The legacy script matches on the 720x1280 portrait framebuffer while this project
+    // matches on 1280x720 landscape screenshots, so every region and offset point was
+    // rotated by 90 degrees:  x' = y, y' = 719 - x,  offset (dx, dy) -> (dy, -dx).
+    // Generic popup dialog. In the current game the dialog is a wood panel with a bright
+    // gold top edge (fdf3a0) sitting on a brown body (935c20); the legacy light-blue colors
+    // (CAFFFD/67afdd) no longer exist, so this is re-derived from the real screenshots.
+    // Colors are BGR-ordered: fdf3a0 -> "a0f3fd", 935c20 -> "205c93".
+    override val CommonDialog = ColorSchema.parse(
+        150, 180, 1130, 360, "a0f3fd",
+        "0|1|205c93,0|3|1c5487,-3|-2|a0f3fd,3|-2|a0f3fd,0|-1|9ef0fd",
+        0, 0.85, "通用对话框"
+    )
+    // Return-to-camp button at the lower left
+    override val BottomLeftReturnToCamp = ColorSchema.parse(
+        23, 541, 178, 693, "7F9DFF-101010",
+        "5|0|7FA4FF-101010,27|-7|728AE8-101010,19|-32|2548B7-101010,5|-34|2849C1-101010,18|-41|3B58CC-101010,-17|-16|1F38AD-101010,14|14|7093D5-101010",
+        0, 0.9, "左下角回营"
+    )
+    // Main village return-to-camp confirmation
+    override val ReturnToCampMain = ColorSchema.parse(
+        573, 63, 712, 163, "59c888-101010",
+        "6|4|59c888-101010,10|-1|59c888-101010,-1|7|000000-101010,5|10|59c888-101010,2|13|59c888-101010,7|15|000000-101010",
+        0, 0.9, "回营主"
+    )
+    // Fallback variant 2 (the legacy script tries variants in order)
+    override val ReturnToCampMain2 = ColorSchema.parse(
+        450, 277, 846, 594, "B92688-101010",
+        "4|-6|D50BAB-101010,9|-3|D20BA8-101010,13|0|AC1778-101010,7|5|B90983-101010,8|10|00A1E4-101010,19|2|008ED9-101010,-7|1|00A5E7-101010",
+        0, 0.9, "回营主"
+    )
+    // Fallback variant 3 (the legacy script tries variants in order)
+    override val ReturnToCampMain3 = ColorSchema.parse(
+        521, 537, 761, 686, "2CCD84",
+        "-4|-30|82E4B7,-119|-43|84E4B9,-121|12|25C373,99|10|29C87C,96|-43|84E4B9,-12|11|27C577,-17|-44|84E4B9",
+        0, 0.9, "回营主"
+    )
+    // Fallback variant 4 (the legacy script tries variants in order)
+    override val ReturnToCampMain4 = ColorSchema.parse(
+        511, 542, 771, 714, "84e4b9-101010",
+        "-106|-4|84e4b9-101010,110|-5|84e4b9-101010,51|-2|84e4b9-101010,-51|-6|84e4b9-101010,-103|46|27c577-101010,-33|43|2ccc83-101010,33|42|2ccd84-101010,96|42|2ccd84-101010,104|59|030303-101010,34|59|030303-101010,-38|60|060606-101010,-86|61|060606-101010",
+        0, 0.9, "回营主"
+    )
+    // Fallback variant 5 (the legacy script tries variants in order)
+    override val ReturnToCampMain5 = ColorSchema.parse(
+        537, 486, 732, 684, "1FBB6C-101010",
+        "4|-44|8CFAE2-101010,-69|8|1FBC6F-101010,-66|-42|89F9E1-101010,68|6|1FBB6D-101010,68|-46|8FFBE4-101010,66|-23|66F0CC-101010,-55|-19|5FEBC2-101010,-81|93|000000-101010,-35|94|020202-101010,19|94|010101-101010,70|94|000000-101010",
+        0, 0.9, "回营主"
+    )
+    // Builder base return-to-camp confirmation
+    override val ReturnToCampBuilder = ColorSchema.parse(
+        835, 357, 941, 560, "47D9FF-101010",
+        "4|3|03B9F0-101010,2|-3|49E2FF-101010,7|-2|0DD0FF-101010,4|-6|4AF2FF-101010,9|-5|19E4FF-101010,7|-9|4CFFFF-101010,11|-8|2FFBFE-101010,16|-6|3CFCFF-101010,-4|-12|49F0FF-101010",
+        0, 0.9, "回营夜"
     )
 }

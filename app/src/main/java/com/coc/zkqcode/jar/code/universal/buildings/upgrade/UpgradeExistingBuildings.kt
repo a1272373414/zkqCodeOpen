@@ -278,9 +278,10 @@ private suspend fun upgradeHero(building: String): LoopAction {
         val x1 = 55 + heroIndex * 228
         val x2 = 240 + heroIndex * 228
 
-        // Create a ColorSchema with the same color pattern but different search area
-        val heroInsufficientResources = ColorSchema.parse(
-            x1, 500, x2, 530, "7F88FF", "1|0|7F88FF,2|0|7F88FF,3|0|7F88FF,3|1|7F88FF,2|1|7F88FF,0|1|7F88FF,0|1|7F88FF,0|2|7F88FF,1|2|7F88FF", 0, 0.97, "${building}资源不足"
+        // Same color pattern as MainBaseInsufficientResources, only the search area differs
+        // because each hero slot sits at a different x offset.
+        val heroInsufficientResources = ColorSchema.rescope(
+            MyColors.MainBaseInsufficientResources, x1, 500, x2, 530
         )
 
         if (findMultiColors(schema = heroInsufficientResources) != null) {
@@ -296,8 +297,8 @@ private suspend fun upgradeHero(building: String): LoopAction {
         ShowMessage("升级英雄：飞龙公爵")
         TouchActions.swipe(1189, 354, 120, 345, delayTime = 300)
         delayWithMultiplier(200)
-        val heroInsufficientResources = ColorSchema.parse(
-            1020, 480, 1230, 530, "7F88FF", "1|0|7F88FF,2|0|7F88FF,3|0|7F88FF,3|1|7F88FF,2|1|7F88FF,0|1|7F88FF,0|1|7F88FF,0|2|7F88FF,1|2|7F88FF", 0, 0.97, "${building}资源不足"
+        val heroInsufficientResources = ColorSchema.rescope(
+            MyColors.MainBaseInsufficientResources, 1020, 480, 1230, 530
         )
         if (findMultiColors(schema = heroInsufficientResources) != null) {
             ShowMessage("${building}资源不足，跳过")

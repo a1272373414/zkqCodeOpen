@@ -34,6 +34,18 @@ interface IUIColors {
     val MorePointCoupon: ColorSchema
     val TencentChildProtection: ColorSchema
     val CollectElixirCartTutorial: ColorSchema
+
+    // Migrated from the legacy freescript UI lookup table (函数275a)
+    val PlayerProfileButton: ColorSchema
+    val RedX: ColorSchema
+    val RedX2: ColorSchema
+    val RedX3: ColorSchema
+    val RedX4: ColorSchema
+    val RedX5: ColorSchema
+    val RedX6: ColorSchema
+    val RedX7: ColorSchema
+    val RedX8: ColorSchema
+    val RedX9: ColorSchema
 }
 
 object UIColors : IUIColors {
@@ -134,5 +146,76 @@ object UIColors : IUIColors {
     )
     override val CollectElixirCartTutorial = ColorSchema.parse(
         618, 461, 658, 542, "02A5FE", "8|0|00A8FD,16|0|00A9FD,24|0|00A9FD,32|0|00A5FD,0|41|22AFFF,8|41|21B8FF,16|41|21BDFF,24|41|21BBFF,32|41|22B2FF", 0, 0.9, "领圣水车教程"
+    )
+
+    // --- Migrated from the legacy freescript UI lookup table (函数275a) ---
+    // The legacy script matches on the 720x1280 portrait framebuffer while this project
+    // matches on 1280x720 landscape screenshots, so every region and offset point was
+    // rotated by 90 degrees:  x' = y, y' = 719 - x,  offset (dx, dy) -> (dy, -dx).
+    // Player profile entry
+    override val PlayerProfileButton = ColorSchema.parse(
+        1096, 36, 1139, 78, "2722F0-101010",
+        "8|0|FBFBFB-101010,18|1|FBFBFB-101010,25|0|2722F0-101010,26|-12|807DF9-101010,18|-13|FFFFFF-101010,8|-11|FFFFFF-101010,0|-11|7B78F8-101010",
+        0, 0.9, "个人信息"
+    )
+    // Red X close button. In the current game version this is a small red "X" on a white
+    // round button at the top-right. Note: ColorSchema colors are BGR-ordered, so the red
+    // pixel (r=240,g=34,b=39) is written as "2722F0". The legacy freescript's "1511EC" was
+    // also red (BGR), but its offset points no longer match the current button, so this is
+    // re-derived from the real screenshots.
+    override val RedX = ColorSchema.parse(
+        950, 10, 1270, 230, "2722F0",
+        "-1|-1|2722F0,1|-1|2722F0,-1|1|2722F0,1|1|2722F0,0|1|2722F0,0|-1|2722F0,-1|0|2722F0,1|0|2722F0",
+        0, 0.85, "红x"
+    )
+    // RedX2-9 below are retained from the legacy freescript as extra candidate anchors; the
+    // current game's close button is covered by the primary RedX above.
+    // Fallback variant 2 (the legacy script tries variants in order)
+    override val RedX2 = ColorSchema.parse(
+        657, 3, 1273, 329, "FBFBFB-101010",
+        "0|-17|FFFFFF-101010,11|0|FBFBFB-101010,12|-18|FFFFFF-101010,-10|5|2621E3-101010,-9|-20|8D8EF3-101010,-6|-9|8D8EF3-101010,-8|-3|2722F0-101010,22|4|2621E6-101010,20|-3|2722F0-101010,20|-8|8C8EF2-101010,21|-21|8D8EF3-101010",
+        2, 0.93, "红x"
+    )
+    // Fallback variant 3 (the legacy script tries variants in order)
+    override val RedX3 = ColorSchema.parse(
+        657, 3, 1273, 329, "211DEC-101010",
+        "0|-4|171515-101010,1|-10|F9F9F9-101010,-7|-14|211DF5-101010,-7|-22|7976FD-101010,-9|-34|8585FE-101010,18|0|211DEC-101010,17|-5|151413-101010,15|-10|F9F9F9-101010,15|-30|FFFFFF-101010,18|-37|8585FF-101010,26|-22|7976FD-101010,28|-12|211DF5-101010",
+        2, 0.93, "红x"
+    )
+    // Fallback variant 4 (the legacy script tries variants in order)
+    override val RedX4 = ColorSchema.parse(
+        657, 3, 1273, 329, "231FEA-101010",
+        "-1|-3|171514-101010,-1|-7|FBFBFB-101010,-9|-10|221EF7-101010,-6|-15|7A78FF-101010,13|1|2320E6-101010,9|-3|181715-101010,9|-8|FBFBFB-101010,18|-10|221EF7-101010,14|-15|7A78FF-101010",
+        0, 0.9, "红x"
+    )
+    // Fallback variant 5 (the legacy script tries variants in order)
+    override val RedX5 = ColorSchema.parse(
+        657, 3, 1273, 329, "FFFFFF-101010",
+        "-9|0|0300C1-101010,-7|-7|7A77EA-101010,-8|-14|7D77EF-101010,18|6|0100B8-101010,9|0|FFFFFF-101010,16|-6|7A77E9-101010,5|-7|FFFFFF-101010,17|-19|7E77F2-101010",
+        2, 0.93, "红x"
+    )
+    // Fallback variant 6 (the legacy script tries variants in order)
+    override val RedX6 = ColorSchema.parse(
+        657, 3, 1273, 329, "FAF6F6-101010",
+        "13|0|FAF6F6-101010,-1|5|0D0D0D-101010,14|5|0D0D0D-101010,-7|-4|1511EC-101010,-7|-10|7972FF-101010,21|-3|1511EC-101010,20|-11|7C75FF-101010,-8|9|1A15D1-101010,8|10|1D18CE-101010,19|9|1A15D1-101010",
+        2, 0.93, "红x"
+    )
+    // Fallback variant 7 (the legacy script tries variants in order)
+    override val RedX7 = ColorSchema.parse(
+        657, 3, 1273, 329, "FBFBFB-101010",
+        "12|0|FBFBFB-101010,-1|4|171614-101010,11|4|181715-101010,0|7|2520DD-101010,12|7|2520DD-101010,-5|-5|2722F0-101010,-5|-10|6460F6-101010,18|-4|2722F0-101010,18|-11|6B68F7-101010",
+        2, 0.93, "红x"
+    )
+    // Fallback variant 8 (the legacy script tries variants in order)
+    override val RedX8 = ColorSchema.parse(
+        657, 3, 1273, 329, "F9F9F9-101010",
+        "9|0|F9F9F9-101010,0|3|272727-101010,10|3|0F0F0D-101010,-6|-3|2521F1-101010,-5|-9|8C8EF3-101010,14|-2|2521ED-101010,15|-9|8C8EF2-101010,0|6|251FDC-101010,10|6|251EDC-101010",
+        2, 0.93, "红x"
+    )
+    // Fallback variant 9 (the legacy script tries variants in order)
+    override val RedX9 = ColorSchema.parse(
+        657, 3, 1273, 329, "ffffff-101010",
+        "-5|-5|948cff-101010,11|5|867fff-101010,7|9|7c75ff-101010,14|18|1712ec-101010,8|17|1511ec-101010,0|19|faf6f6-101010,10|30|1611d9-101010,-1|31|1611d5-101010",
+        0, 0.9, "红x"
     )
 }
