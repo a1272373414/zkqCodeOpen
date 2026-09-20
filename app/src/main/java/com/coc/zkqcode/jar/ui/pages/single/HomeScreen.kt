@@ -30,7 +30,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import java.io.File
 import com.coc.zkqcode.jar.ui.schema.ConfigManager
+import com.coc.zkqcode.jar.code.universal.captureManualSnapshot
 import com.coc.zkqcode.core.data.database.GlobalVars
 import com.coc.zkqcode.jar.ui.schema.Schema.GLOBAL_SETTINGS
 import com.coc.zkqcode.jar.ui.components.CustomAlertDialog
@@ -79,6 +81,8 @@ fun HomeScreen(
         return
     }
     val configCountStr = configCountState.value
+
+    val context = LocalContext.current
 
 
     var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
@@ -140,6 +144,21 @@ fun HomeScreen(
 
     val cleanAllData = {
         showCleanAllConfirmation = true
+    }
+
+    // Clear all debug snapshots saved under filesDir/debug_snapshots (see captureDebugSnapshot).
+    val clearDebugSnapshots = {
+        scope.launch {
+            val dir = File(context.filesDir, "debug_snapshots")
+            var deleted = 0
+            var failed = 0
+            withContext(Dispatchers.IO) {
+                dir.listFiles()?.forEach { f ->
+                    if (f.isFile && f.delete()) deleted++ else if (f.isFile) failed++
+                }
+            }
+            showMsg(if (failed == 0) "已清空debug截图（${deleted}张）" else "清空完成：成功${deleted}/失败${failed}")
+        }
     }
 
     // Auto-Run Timer Logic
@@ -246,6 +265,16 @@ fun HomeScreen(
                                 CustomButton(
                                     text = "清除全部数据", onClick = { cleanAllData() }, explain = "点击后将删除所有数据，包括辅助设置，保存的账号信息，数据号信息等等，用于保护用户隐私。"
                                 )
+                                CustomButton(
+                                    text = "清空debug截图",
+                                    onClick = { clearDebugSnapshots() },
+                                    explain = "删除辅助私存储下的 filesDir/debug_snapshots 目录内所有未识别/异常时自动留档的截图，不影响其他数据。"
+                                )
+                                CustomButton(
+                                    text = "抓取游戏画面",
+                                    onClick = { scope.launch { captureManualSnapshot() } },
+                                    explain = "点击后自动回到游戏界面并截图保存到 filesDir/debug_snapshots（manual_ 前缀），用于采集弹窗/页面特征以便补充识别 schema。"
+                                )
                             }
                             Text(
                                 text = "换机或设备到期前必须清空全部数据！部分云机在设备到期后不会清空用户数据，严重威胁隐私安全！",
@@ -297,7 +326,6 @@ fun HomeScreen(
         }
 
         // 3. Bottom fixed button area
-        val context = LocalContext.current
         Column(
             modifier = Modifier
                 .fillMaxWidth()

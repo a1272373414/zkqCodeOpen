@@ -8,6 +8,7 @@ import com.coc.zkqcode.core.util.touchactions.TouchActions
 import com.coc.zkqcode.jar.code.colorschema.MyColors
 import com.coc.zkqcode.jar.code.mainbase.attack.handleRewardPopup
 import com.coc.zkqcode.jar.code.universal.colors.findMultiColors
+import com.coc.zkqcode.jar.code.universal.captureDebugSnapshot
 import com.coc.zkqcode.jar.code.universal.smalltools.checkReconnections
 import com.coc.zkqcode.jar.code.universal.smalltools.getBooleanConfigRuntime
 import com.coc.zkqcode.jar.code.universal.smalltools.isGameAtFront
@@ -38,6 +39,11 @@ suspend fun enterMainScreen(isDoubleCheck: Boolean = false): Boolean {
         if (!isGameAtFront()) {
             runGame()
         } else {
+            // Phase 1 (reused from legacy freescript): observe the current screen so the
+            // user always knows which page / flow node we are on instead of guessing.
+            SceneState.setScene(detectCurrentScene())
+            // Phase 3 (reused from legacy 函数47a/58a): dismiss any blocking popup first.
+            sweepBlockingPopups()
             if (isInHomePage()) {
                 if (!isDoubleCheck) {
                     ShowMessage("已进入主界面")
@@ -49,7 +55,15 @@ suspend fun enterMainScreen(isDoubleCheck: Boolean = false): Boolean {
                     return true
                 }
             }
-            if (!checkReconnections()) return false
+            // Phase 4 (reused from legacy 游戏运行控制): when reconnection handling asks for an
+            // account switch, record the state instead of just returning false silently.
+            if (!checkReconnections()) {
+                SceneState.setRunControl(GameRunControl.SWITCH_ACCOUNT)
+                return false
+            }
+            // Best-effort fatal-state detection (封号/维护/网络异常/顶号 are extension points in
+            // detectGameRunControl until their dialog schemas are captured).
+            SceneState.setRunControl(detectGameRunControl())
             // Dismiss the event reward popup if present (can appear on the settlement screen)
             if (handleRewardPopup()) continue
             ShowMessage("账号${InGamesVars.currentAccountNumber}，倒计时${((timeoutMillis - System.currentTimeMillis() + startTime) / 1000).toInt()}秒")
@@ -68,6 +82,9 @@ suspend fun enterMainScreen(isDoubleCheck: Boolean = false): Boolean {
     }
 
     // Return false if the loop finishes without finding the main screen
+    // Phase 4 (reused from legacy 游戏运行控制): record the timeout node instead of failing silently.
+    SceneState.setRunControl(GameRunControl.INTERFACE_TIMEOUT)
+    captureDebugSnapshot("进入主界面超时（${timeoutSeconds}s），当前页面无法识别或卡住")
     killGame()
     return false
 }
@@ -81,6 +98,9 @@ suspend fun clickRightBottom(times: Int, delayTime: Int = 50) {
 
 
 private suspend fun closeAdvertisements() {
+    // 0. Phase 3 (reused from legacy 函数58a): first sweep any generic red-X / wood-panel
+    // dialog that may be covering the screen, so the specific schema checks below start clean.
+    sweepBlockingPopups()
     // 1. Capture the screen and cast safely (Use 'var' so we can update it)
     var screenBuffer = ScreenCaptureManager.capture(asBitmap = false) as? ScreenCaptureManager.CaptureResult ?: logAndRestart("failed to take screenshot at close advertisement")
 
