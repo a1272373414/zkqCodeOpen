@@ -19,6 +19,7 @@ import com.coc.zkqcode.jar.code.universal.SceneState
 import com.coc.zkqcode.jar.code.universal.GameScene
 import com.coc.zkqcode.jar.code.universal.detectCurrentScene
 import com.coc.zkqcode.jar.code.universal.waitForScene
+import com.coc.zkqcode.jar.code.universal.sweepBlockingPopups
 import com.coc.zkqcode.jar.ui.schema.Schema
 
 /**
@@ -151,6 +152,18 @@ private fun trainCardOf(name: String): ColorSchema? = EVENT_TROOP_CARDS[name] ?:
 /** 查兵种默认造兵次数。 */
 private fun trainCountOf(name: String): Int =
     DEFAULT_COUNT[name] ?: EVENT_TROOP_COUNTS[name] ?: 10
+
+/**
+ * 关闭选兵面板（左上角 X）。**只在面板确实打开时才点**：
+ * 面板未打开时 (219,139) 在"我的军队"页正好落在左侧英雄头像上，会误触弹出"选择英雄"对话框；
+ * 该对话框会给整个界面加一层黑色遮罩（实测右下角「进攻！」按钮由 9BFDCF 被压暗到 256A48），
+ * 之后所有颜色特征都匹配失败、流程卡死在练兵界面（2026-09-21 实测复现）。
+ */
+private suspend fun closePickerIfOpen(delayTime: Int = 1000) {
+    if (findMultiColors(MyColors.TrainBarbarian) != null) {
+        TouchActions.tap(219, 139, delayTime = delayTime)
+    }
+}
 
 /**
  * 把选兵列表钉回最左页。幂等：已在最左时多余滑动不会越界；次数取 [MAX_PICKER_PAGES]，
@@ -340,7 +353,7 @@ suspend fun mainBaseTrainTroops(): Boolean {
         trainByFeatures("兵种", pending.map { (name, feature) -> TrainTarget(name, feature, trainCountOf(name)) })
 
         // Close tab and Clean Queue 2
-        TouchActions.tap(219, 139, delayTime = 1000)
+        closePickerIfOpen()
         point = findMultiColorsUntil(schemas = listOf(MyColors.DeleteAll2), duration = 500)
         if (point != null) {
             TouchActions.tap(point.x, point.y)
@@ -359,7 +372,7 @@ suspend fun mainBaseTrainTroops(): Boolean {
         }
 
         // Close tab and Clean Queue 3
-        TouchActions.tap(219, 139, delayTime = 1000)
+        closePickerIfOpen()
         point = findMultiColorsUntil(schemas = listOf(MyColors.DeleteAll3), duration = 500)
         if (point != null) {
             TouchActions.tap(point.x, point.y)
@@ -377,8 +390,10 @@ suspend fun mainBaseTrainTroops(): Boolean {
             trainByFeatures("攻城机器", SIEGE_PLAN)
         }
 
-        // Final Close
-        TouchActions.tap(219, 139, delayTime = 1000)
+        // Final Close：先清掉可能存在的弹窗（有黑色遮罩时，下面窗口的关闭按钮也会点不中）
+        sweepBlockingPopups()
+        closePickerIfOpen()
+        sweepBlockingPopups()
         TouchActions.tap(1232, 65, delayTime = 300)
 
         writeMemory(storageKey, (System.currentTimeMillis() / 60_000).toString())

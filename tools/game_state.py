@@ -33,7 +33,7 @@ PKG = os.path.join(ROOT, r"app\src\main\java\com\coc\zkqcode\jar\code\colorschem
 F_FEATURE = os.path.join(PKG, "FeatureColors.kt")
 F_UI = os.path.join(PKG, "UIColors.kt")
 F_TRAINING = os.path.join(PKG, r"mainbase\MainBaseTraining.kt")
-F_TRAIN_BTN = os.path.join(PKG, r"mainbase\MainBaseTrainButtonColors.kt")
+F_TRAIN_BTN = os.path.join(PKG, r"mainbase\MainBaseTrainCardColors.kt")
 F_BLACK = os.path.join(PKG, r"mainbase\MainBaseBlackElixirTroopColors.kt")
 F_SUPER = os.path.join(PKG, r"mainbase\MainBaseSuperTroopColors.kt")
 

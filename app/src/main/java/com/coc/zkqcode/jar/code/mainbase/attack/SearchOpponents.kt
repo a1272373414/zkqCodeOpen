@@ -9,7 +9,9 @@ import com.coc.zkqcode.jar.code.universal.InGamesVars
 import com.coc.zkqcode.jar.code.universal.colors.findMultiColors
 import com.coc.zkqcode.jar.code.universal.colors.findMultiColorsUntil
 import com.coc.zkqcode.jar.code.universal.enterMainScreen
+import com.coc.zkqcode.jar.code.universal.sweepBlockingPopups
 import com.coc.zkqcode.jar.code.universal.recognizer.recognizeResources
+import com.topjohnwu.superuser.Shell
 import com.coc.zkqcode.jar.code.universal.smalltools.StorageKeys
 import com.coc.zkqcode.jar.code.universal.smalltools.checkReconnections
 import com.coc.zkqcode.jar.code.universal.smalltools.getBooleanConfigRuntime
@@ -96,9 +98,15 @@ suspend fun searchOpponentsAndDeployTroops(): Boolean {
     var battleStarted = false
     val battleStartTime = System.currentTimeMillis()
     while (System.currentTimeMillis() - battleStartTime < SEARCH_TIMEOUT_MS) {
+        // 每轮先清掉挡住界面的弹窗。这一步是关键：弹窗会给整个界面加一层黑色遮罩，
+        // 遮罩下所有按钮颜色都被压暗、特征相似度匹配全部失败，脚本会停在这一屏一动不动
+        // （实测：练兵页误触英雄栏弹出的"选择英雄"会把「进攻！」从 9BFDCF 压到 256A48）。
+        sweepBlockingPopups()
+        var acted = false
         val battleIcon = findMultiColorsUntil(schemas = listOf(MyColors.TrainTroops), duration = 500)
         if (battleIcon != null) {
             TouchActions.tap(83, 631, delayTime = 500)
+            acted = true
         }
         // Detect attack cooldown screen; abort search so mainBaseAttack() can skip battle logic
         val battlePage = findMultiColors(MyColors.BattlePage)
@@ -117,14 +125,23 @@ suspend fun searchOpponentsAndDeployTroops(): Boolean {
         val searchOpponents = findMultiColors(schema = MyColors.SearchOpponents)
         if (searchOpponents != null) {
             TouchActions.tap(searchOpponents.x, searchOpponents.y, delayTime = 500)
+            acted = true
         }
         val attackButton = findMultiColors(schema = MyColors.AttackButton)
         if (attackButton != null) {
             TouchActions.tap(attackButton.x, attackButton.y, delayTime = 500)
+            acted = true
         }
         val insufficientGold = findMultiColors(schema = MyColors.InsufficientGold)
         if (insufficientGold != null) {
             break
+        }
+        // 兜底：三个锚点（主村庄 TrainTroops / 联机模式页 SearchOpponents / 练兵页 AttackButton）
+        // 一个都没命中，说明被"既没有红 x、也不是通用对话框"的弹窗挡住了（sweepBlockingPopups 认不出它，
+        // 例如"选择英雄"）。用返回键关掉它，否则这一屏会一直空转直到搜索超时。
+        if (!acted && battlePage == null) {
+            pressBack()
+            ShowMessage("账号${InGamesVars.currentAccountNumber}，检测到未知弹窗，已按返回键关闭")
         }
         if (!checkReconnections()) return false
 
@@ -230,4 +247,12 @@ private suspend fun mainBaseBattleTutorial(): Boolean {
         delayWithMultiplier(100)
     }
     return enterMainScreen()
+}
+
+/**
+ * 用返回键关闭"既没有红 x、也不是通用对话框"的弹窗（例如"选择英雄"这类游戏内对话框）。
+ * 通过 root shell 发 keyevent，失败时静默忽略（不影响主流程）。
+ */
+private fun pressBack() {
+    runCatching { Shell.cmd("input keyevent 4").exec() }
 }
