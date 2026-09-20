@@ -46,6 +46,9 @@ interface IUIColors {
     val RedX7: ColorSchema
     val RedX8: ColorSchema
     val RedX9: ColorSchema
+
+    /** 掉线弹窗（"还在吗？因为太久没有进行操作，您已断开连接。"）里的"重新载入游戏"按钮文字。 */
+    val ReloadGameButton: ColorSchema
 }
 
 object UIColors : IUIColors {
@@ -217,5 +220,12 @@ object UIColors : IUIColors {
         657, 3, 1273, 329, "ffffff-101010",
         "-5|-5|948cff-101010,11|5|867fff-101010,7|9|7c75ff-101010,14|18|1712ec-101010,8|17|1511ec-101010,0|19|faf6f6-101010,10|30|1611d9-101010,-1|31|1611d5-101010",
         0, 0.9, "红x"
+    )
+    // 掉线弹窗（"还在吗？…您已断开连接。"）中的"重新载入游戏"按钮：青色文字 + 12 个同色偏移点，
+    // 由真实截图（I:\coc\游戏截图\补充5\游戏掉线弹窗-*.png）派生；已校验在训练/法术/攻城器选兵界面上零误命中。
+    override val ReloadGameButton = ColorSchema.parse(
+        23, 429, 1279, 693, "C4CB80",
+        "41|19|C4CB80,38|22|C4CB80,20|19|C4CB80,20|1|C4CB80,11|13|C4CB80,-7|19|C4CB80,-10|19|C4CB80,-19|19|C4CB80,29|1|C3CA80,44|16|C3CA7F,-1|1|C0C77E,26|16|BFC67E",
+        0, 0.9, "重新载入游戏"
     )
 }

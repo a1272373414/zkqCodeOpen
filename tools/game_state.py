@@ -134,6 +134,7 @@ def find_first(img, feats):
 _feat_train_troops = parse_file(F_FEATURE, {"TrainTroops"})
 _feat_dialog = parse_file(F_FEATURE, {"CommonDialog"})
 _feat_redx = parse_file(F_UI, {"RedX"})
+_feat_reload = parse_file(F_UI, {"ReloadGameButton"})
 _feat_training = parse_file(F_TRAINING, {"TrainingPage", "AttackInTrainingPage",
                                          "AttackInTrainingPage2", "AttackInTrainingPage3"})
 _feat_trainbarb = parse_file(F_TRAINING, {"TrainBarbarian"})
@@ -201,11 +202,20 @@ def disconnect_dialog(img):
 
 
 def ensure_online(dt=18):
-    """若出现掉线弹窗则点击"重新载入游戏"并等待重连。返回是否处理过。"""
+    """若出现掉线弹窗则点击"重新载入游戏"并等待重连。返回是否处理过。
+
+    优先用 App 里的 `ReloadGameButton` 特征精确定位按钮文字（与 Kotlin 侧同一份特征），
+    特征没命中时再回退到"灰底判定 + 固定坐标"。
+    """
     img = cv2.imread(cap('online.png'))
+    h = find_first(img, _feat_reload)
+    if h:
+        print('检测到掉线弹窗（「重新载入游戏」@%d,%d）→ 点击并等待重连' % (h[1], h[2]))
+        tap(h[1] + 14, h[2] + 16, dt=dt)
+        return True
     if not disconnect_dialog(img):
         return False
-    print('检测到掉线弹窗 → 点击"重新载入游戏"')
+    print('检测到掉线弹窗（灰底判定）→ 点击固定坐标"重新载入游戏"')
     tap(RELOAD_BTN[0], RELOAD_BTN[1], dt=dt)
     return True
 

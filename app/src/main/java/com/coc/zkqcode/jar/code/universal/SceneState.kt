@@ -301,6 +301,13 @@ suspend fun hasBlockingPopup(byteBuffer: ScreenCaptureManager.CaptureResult? = n
 suspend fun sweepBlockingPopups(): Boolean {
     val screen = ScreenCaptureManager.capture(asBitmap = false) as? ScreenCaptureManager.CaptureResult
         ?: return false
+    // 掉线弹窗（"还在吗？因为太久没有进行操作，您已断开连接。"）：它既没有红 x 也不是通用对话框，
+    // 会让等待循环一直转下去。命中"重新载入游戏"按钮文字就点它（特征来自真实截图）。
+    findMultiColors(byteBuffer = screen, schema = MyColors.ReloadGameButton, increment = 1)?.let {
+        TouchActions.tap(it.x + 14, it.y + 16, delayTime = 500)
+        ShowMessage("检测到掉线弹窗，已点击「重新载入游戏」")
+        return true
+    }
     // Generic red-X close button (top-right round button).
     findMultiColors(byteBuffer = screen, schema = MyColors.RedX, increment = 1)?.let {
         TouchActions.tap(it.x, it.y, delayTime = 500)

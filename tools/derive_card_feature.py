@@ -70,12 +70,14 @@ def main():
     ap.add_argument('--y', type=int, required=True)
     ap.add_argument('--others', default='')
     ap.add_argument('--key', default='NEW')
+    ap.add_argument('--r', type=int, default=70, help='裁剪半径（小按钮/文字用 30~40）')
     args = ap.parse_args()
 
     img = cv2.imread('%s/%s' % (args.dir, args.shot))
-    crop = card_crop(img, args.x, args.y)
+    R_CROP = args.r
+    crop = card_crop(img, args.x, args.y, R_CROP)
     h, w = crop.shape[:2]
-    others = [card_crop(img, int(p.split(',')[0]), int(p.split(',')[1]))
+    others = [card_crop(img, int(p.split(',')[0]), int(p.split(',')[1]), R_CROP)
               for p in args.others.split(';') if p.strip()]
 
     # 1) 选锚点：判别力最大且颜色不单调
@@ -113,8 +115,8 @@ def main():
 
     # 3) 校验：必须命中自身，且不命中同页其它卡片
     # 注意：命中的是**锚点**位置（= 卡片中心 + 锚点在卡片内的相对偏移），不是卡片中心
-    exp_x = args.x - 70 + ax
-    exp_y = args.y - 70 + ay
+    exp_x = args.x - R_CROP + ax
+    exp_y = args.y - R_CROP + ay
     hits = match_positions(img, main, offs)
     own = [p for p in hits if abs(p[0] - exp_x) <= 12 and abs(p[1] - exp_y) <= 12]
     bad = []

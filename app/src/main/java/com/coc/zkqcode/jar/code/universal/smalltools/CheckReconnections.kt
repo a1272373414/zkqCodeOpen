@@ -19,8 +19,11 @@ suspend fun checkReconnections(): Boolean {
     checkPrivacy()
 
     // 2. Define the schemas to check against
+    // ReloadGameButton 是"还在吗？…您已断开连接。"弹窗里"重新载入游戏"按钮的文字特征，
+    // 由真实截图派生，作为该弹窗的直接判据（比仅靠面板底色更可靠）。
     val homeSchemas = listOf(
-        MyColors.Reconnection, MyColors.ReconnectionOnCloudPhone, MyColors.RatingOnCloudPhone
+        MyColors.Reconnection, MyColors.ReconnectionOnCloudPhone, MyColors.RatingOnCloudPhone,
+        MyColors.ReloadGameButton
     )
     val screenBuffer = ScreenCaptureManager.capture(asBitmap = false) as? ScreenCaptureManager.CaptureResult ?: return true
     // 3. Run the check and capture the result
@@ -39,10 +42,19 @@ suspend fun checkReconnections(): Boolean {
             // 4. Implement logic based on the action value
             when (action) {
                 0 -> {
-                    // Action: Tap the "Reload" button
-                    TouchActions.tap(379, 458)
-                    TouchActions.tap(793, 459)//Rating Notification
-                    TouchActions.tap(338, 511)//Tutorial "Confirm" button
+                    // Action: Tap the "Reload" button.
+                    // Prefer the precise schema (derived from a real disconnect-popup screenshot);
+                    // fall back to the legacy blind taps only when the button text is not found.
+                    val reload = findMultiColors(
+                        byteBuffer = screenBuffer, schema = MyColors.ReloadGameButton, increment = 1
+                    )
+                    if (reload != null) {
+                        TouchActions.tap(reload.x + 14, reload.y + 16)
+                    } else {
+                        TouchActions.tap(379, 458)
+                        TouchActions.tap(793, 459)//Rating Notification
+                        TouchActions.tap(338, 511)//Tutorial "Confirm" button
+                    }
                 }
 
                 1 -> {
