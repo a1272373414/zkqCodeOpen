@@ -159,3 +159,29 @@ def recover_to_training(max_rounds=8):
 def count_hits(img, feats):
     return sum(1 for (_, (rx1, ry1, rx2, ry2), a, o) in feats
                if collect(img[ry1:ry2, rx1:rx2], a, o) is not None)
+
+
+# --- 掉线弹窗处理（"还在吗？因为太久没有进行操作，您已断开连接。"+ 重新载入游戏） ---
+RELOAD_BTN = (385, 462)   # "重新载入游戏" 文字中心（1280x720 实测）
+
+
+def disconnect_dialog(img):
+    """掉线弹窗特征：弹窗内部是几块大面积均匀灰底（无图标/无渐变）。"""
+    for (x, y) in ((474, 296), (829, 237), (600, 500)):
+        p = img[y - 6:y + 6, x - 6:x + 6].astype(int)
+        if p.size == 0 or p.std() > 12:
+            return False
+        m = p.reshape(-1, 3).mean(axis=0)
+        if m.max() - m.min() > 25:
+            return False
+    return True
+
+
+def ensure_online(dt=18):
+    """若出现掉线弹窗则点击"重新载入游戏"并等待重连。返回是否处理过。"""
+    img = cv2.imread(cap('online.png'))
+    if not disconnect_dialog(img):
+        return False
+    print('检测到掉线弹窗 → 点击"重新载入游戏"')
+    tap(RELOAD_BTN[0], RELOAD_BTN[1], dt=dt)
+    return True

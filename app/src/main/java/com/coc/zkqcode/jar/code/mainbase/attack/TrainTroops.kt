@@ -172,6 +172,59 @@ private suspend fun trainTroopOnPage(name: String, feature: ColorSchema, times: 
     return true
 }
 
+/** 一个造兵目标：显示名 + 训练卡片特征 + 点击次数。 */
+private data class TrainTarget(val name: String, val feature: ColorSchema, val times: Int)
+
+/**
+ * 选兵面板通用造兵流程（兵种 / 法术 / 攻城器共用）：
+ * 钉回最左页 → 逐页「当前页找到就连点造兵，找不到翻页重试」。
+ * 页数自适应：见 [MAX_PICKER_PAGES] / [EMPTY_PAGE_LIMIT]（活动兵会改变页数）。
+ */
+private suspend fun trainByFeatures(label: String, plan: List<TrainTarget>) {
+    val pending = plan.toMutableList()
+    if (pending.isEmpty()) return
+    pinPickerToFirstPage()
+    var page = 1
+    var emptyPages = 0
+    while (pending.isNotEmpty() && page <= MAX_PICKER_PAGES && emptyPages < EMPTY_PAGE_LIMIT) {
+        SceneState.setFlowNode("练兵-$label-第${page}页")
+        var hitsOnPage = 0
+        val pendingIt = pending.iterator()
+        while (pendingIt.hasNext()) {
+            val target = pendingIt.next()
+            if (trainTroopOnPage(target.name, target.feature, target.times)) {
+                hitsOnPage++
+                pendingIt.remove()
+            }
+        }
+        if (pending.isEmpty()) break
+        emptyPages = if (hitsOnPage == 0) emptyPages + 1 else 0
+        page++
+        nextPickerPage()
+    }
+    if (pending.isNotEmpty()) {
+        ShowMessage("账号${InGamesVars.currentAccountNumber}，$label 未找到训练卡片：${pending.joinToString("、") { it.name }}")
+    }
+}
+
+/**
+ * 法术默认造兵计划。原先是对 3 个写死坐标点共 8 次（换设备/列表变化即失效），
+ * 现改为按「闪电法术」的训练卡片特征定位后连点 8 次；要调整造什么法术只改这张表。
+ */
+private val SPELL_PLAN = listOf(TrainTarget("闪电法术", MyColors.TrainCard雷电, 8))
+
+/**
+ * 攻城器默认造兵计划：原先是对 4 个写死坐标各点 1 次（即每种造 1 个），
+ * 现改为按特征定位——页内找到几种就各造 1 个，找不到的会被记录（不静默失败）。
+ */
+private val SIEGE_PLAN = listOf(
+    TrainTarget("攻城战车", MyColors.TrainCard战车, 1),
+    TrainTarget("战斗飞艇", MyColors.TrainCard飞艇, 1),
+    TrainTarget("攻城气球", MyColors.TrainCard战球, 1),
+    TrainTarget("空中战车", MyColors.TrainCard空中战车, 1),
+    TrainTarget("钻地机器", MyColors.TrainCard钻机, 1),
+)
+
 suspend fun mainBaseTrainTroops(): Boolean {
     val isAttackEnabled = getBooleanConfigRuntime(Schema.MAIN_BASE_SETTINGS.AUTO_ATTACK.key)
     val isManualTrainEnabled = getBooleanConfigRuntime(Schema.MAIN_BASE_SETTINGS.MANUAL_TRAINING.key)
@@ -241,28 +294,7 @@ suspend fun mainBaseTrainTroops(): Boolean {
             CORE_FALLBACK.forEach { name -> trainCardOf(name)?.let { pending += name to it } }
         }
 
-        pinPickerToFirstPage()
-        var page = 1
-        var emptyPages = 0
-        while (pending.isNotEmpty() && page <= MAX_PICKER_PAGES && emptyPages < EMPTY_PAGE_LIMIT) {
-            SceneState.setFlowNode("练兵-第${page}页")
-            var hitsOnPage = 0
-            val pendingIt = pending.iterator()
-            while (pendingIt.hasNext()) {
-                val (name, feature) = pendingIt.next()
-                if (trainTroopOnPage(name, feature, trainCountOf(name))) {
-                    hitsOnPage++
-                    pendingIt.remove()
-                }
-            }
-            if (pending.isEmpty()) break
-            emptyPages = if (hitsOnPage == 0) emptyPages + 1 else 0
-            page++
-            nextPickerPage()
-        }
-        if (pending.isNotEmpty()) {
-            ShowMessage("账号${InGamesVars.currentAccountNumber}，未找到训练卡片：${pending.joinToString("、") { it.first }}")
-        }
+        trainByFeatures("兵种", pending.map { (name, feature) -> TrainTarget(name, feature, trainCountOf(name)) })
 
         // Close tab and Clean Queue 2
         TouchActions.tap(219, 139, delayTime = 1000)
@@ -279,11 +311,8 @@ suspend fun mainBaseTrainTroops(): Boolean {
         SceneState.setFlowNode("练兵-法术")
         switchTrainingTab(TAB_SPELLS.first, TAB_SPELLS.second, MyColors.TrainLighteningSpell, "法术")
         if (findMultiColorsUntil(schemas = listOf(MyColors.TrainLighteningSpell), duration = 500) != null) {
-            // Optimized sequence of taps for lightning spells
-            val spellCoords = listOf(351 to 621, 351 to 621, 351 to 621, 220 to 499, 91 to 494, 91 to 494, 91 to 494, 91 to 494)
-            for (coord in spellCoords) {
-                TouchActions.tap(coord.first, coord.second, delayTime = 50)
-            }
+            // 原为 3 个写死坐标共 8 次点击，现改为按特征定位（见 SPELL_PLAN）
+            trainByFeatures("法术", SPELL_PLAN)
         }
 
         // Close tab and Clean Queue 3
@@ -301,10 +330,8 @@ suspend fun mainBaseTrainTroops(): Boolean {
         SceneState.setFlowNode("练兵-攻城机器")
         switchTrainingTab(TAB_SIEGE.first, TAB_SIEGE.second, MyColors.TrainSiegeMachine, "攻城机器")
         if (findMultiColorsUntil(schemas = listOf(MyColors.TrainSiegeMachine), duration = 500) != null) {
-            val siegeCoords = listOf(1047 to 543, 610 to 535, 364 to 536, 138 to 541)
-            for (coord in siegeCoords) {
-                TouchActions.tap(coord.first, coord.second, delayTime = 50)
-            }
+            // 原为 4 个写死坐标各点 1 次，现改为按特征定位（见 SIEGE_PLAN）
+            trainByFeatures("攻城机器", SIEGE_PLAN)
         }
 
         // Final Close
