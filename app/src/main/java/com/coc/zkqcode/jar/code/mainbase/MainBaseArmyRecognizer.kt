@@ -48,6 +48,24 @@ object MainBaseArmyRecognizer {
         "英雄猎手" to MyColors.MainBaseHunter,
         "瓦基丽武神" to MyColors.MainBaseValkyrie,
         "野猪骑士" to MyColors.MainBaseHogRider,
+        // 黑油兵 (training-panel selection grid) — 补齐此前缺失的戈仑石人/烈焰熔炉
+        "戈仑石人" to MyColors.MainBaseGolem,
+        "烈焰熔炉" to MyColors.MainBaseInfernoDragon,
+        // 超级兵 (配兵界面最右列两槽)
+        "寒冰猎犬" to MyColors.MainBaseSuperFrostHound,
+        "超级巨石投手" to MyColors.MainBaseSuperBowler,
+        "超级弓箭手" to MyColors.MainBaseSuperArcher,
+        "超级巨人" to MyColors.MainBaseSuperGiant,
+        "超级法师" to MyColors.MainBaseSuperWizard,
+        "超级亡灵" to MyColors.MainBaseSuperMinion,
+        "超级炸弹人" to MyColors.MainBaseSuperWallBreaker,
+        "火箭气球兵" to MyColors.MainBaseRocketBalloon,
+        "超级瓦基丽武神" to MyColors.MainBaseSuperValkyrie,
+        "超级女巫" to MyColors.MainBaseSuperWitch,
+        "超级矿工" to MyColors.MainBaseSuperMiner,
+        "超级野猪骑士" to MyColors.MainBaseSuperHogRider,
+        "隐秘哥布林" to MyColors.MainBaseSneakyGoblin,
+        "超级大雪怪" to MyColors.MainBaseSuperYeti,
     )
 
     /**

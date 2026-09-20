@@ -48,6 +48,8 @@ import com.coc.zkqcode.jar.code.colorschema.colorpackage.mainbase.IMainBaseTroop
 import com.coc.zkqcode.jar.code.colorschema.colorpackage.mainbase.MainBaseTroopColors
 import com.coc.zkqcode.jar.code.colorschema.colorpackage.mainbase.IMainBaseBlackElixirTroopColors
 import com.coc.zkqcode.jar.code.colorschema.colorpackage.mainbase.MainBaseBlackElixirTroopColors
+import com.coc.zkqcode.jar.code.colorschema.colorpackage.mainbase.IMainBaseSuperTroopColors
+import com.coc.zkqcode.jar.code.colorschema.colorpackage.mainbase.MainBaseSuperTroopColors
 import com.coc.zkqcode.jar.code.colorschema.colorpackage.builderbase.IBuilderBaseBuildButtonColors
 import com.coc.zkqcode.jar.code.colorschema.colorpackage.builderbase.BuilderBaseBuildButtonColors
 
@@ -59,6 +61,7 @@ object MyColors : IUIColors by UIColors, IFeatureColors by FeatureColors, IMainB
     ICapitalTroopColors by CapitalTroopColors, ICapitalArmyColors by CapitalArmyColors,
     IMainBaseTroopColors by MainBaseTroopColors,
     IMainBaseBlackElixirTroopColors by MainBaseBlackElixirTroopColors,
+    IMainBaseSuperTroopColors by MainBaseSuperTroopColors,
     IMainBaseBuildButtonColors by MainBaseBuildButtonColors,
     IBuilderBaseBuildButtonColors by BuilderBaseBuildButtonColors {
     //Main Base Pets Colors
