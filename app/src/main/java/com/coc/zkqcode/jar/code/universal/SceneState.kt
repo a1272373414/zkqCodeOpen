@@ -16,6 +16,7 @@ import com.coc.zkqcode.jar.code.universal.smalltools.isGameAtFront
 import com.coc.zkqcode.jar.code.universal.smalltools.runGame
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
@@ -194,9 +195,9 @@ suspend fun noteUnrecognizedPage(): Boolean {
     unknownEventTimes.removeAll { now - it > UNKNOWN_WINDOW_MS }
     // 3. If the threshold is exceeded, stop the script instead of looping on an unknown state.
     return if (unknownEventTimes.size >= MAX_UNKNOWN_IN_WINDOW) {
-        setRunControl(GameRunControl.STOPPED)
+        SceneState.setRunControl(GameRunControl.STOPPED)
         ShowMessage("短时间内多次（${unknownEventTimes.size}次/${(UNKNOWN_WINDOW_MS / 60_000)}分钟内）无法识别当前页面，已停止脚本")
-        currentCoroutineContext().cancel()
+        currentCoroutineContext()[Job]?.cancel()
         true
     } else {
         false
@@ -339,14 +340,14 @@ suspend fun waitForScene(
         sweepBlockingPopups()
         // 2. Observe the current page and make it visible to the user.
         val scene = detectCurrentScene()
-        setScene(scene)
+        SceneState.setScene(scene)
         onTick(scene)
         if (scene == target) return true
         // 3. Tick once per second so we do not burn CPU.
         delay(1000)
     }
     // 4. Time out: leave an explicit trail instead of killing the game silently.
-    setRunControl(GameRunControl.INTERFACE_TIMEOUT)
+    SceneState.setRunControl(GameRunControl.INTERFACE_TIMEOUT)
     ShowMessage("等待页面【${target.displayName}】超时（${timeoutSeconds}s）")
     captureDebugSnapshot("等待页面【${target.displayName}】超时，当前仍停在【${SceneState.currentScene.displayName}】")
     return false
@@ -384,7 +385,7 @@ suspend fun detectGameRunControl(): GameRunControl {
     val fatalDialogs: List<Pair<ColorSchema, GameRunControl>> = emptyList()
     for ((schema, control) in fatalDialogs) {
         if (findMultiColors(schema = schema, increment = 1) != null) {
-            setRunControl(control)
+            SceneState.setRunControl(control)
             captureDebugSnapshot("识别到异常状态：${control.displayName}（对应弹窗待纳入处理）")
             return control
         }
@@ -408,7 +409,7 @@ suspend fun handleRunControl(): Boolean {
     // Proactive connectivity probe: if the link dropped (and we are not already in a fatal state),
     // raise NETWORK_ERROR so the user sees it and we wait for recovery instead of failing obscurely.
     if (SceneState.currentRunControl == GameRunControl.RUNNING && !isNetworkConnected()) {
-        setRunControl(GameRunControl.NETWORK_ERROR)
+        SceneState.setRunControl(GameRunControl.NETWORK_ERROR)
     }
     return when (val control = SceneState.currentRunControl) {
         GameRunControl.RUNNING -> true
@@ -416,7 +417,7 @@ suspend fun handleRunControl(): Boolean {
         // Stop the whole script (already cancelled by noteUnrecognizedPage / fatal path below).
         GameRunControl.STOPPED -> {
             ShowMessage("脚本已停止：短时间内多次无法识别当前页面")
-            currentCoroutineContext().cancel()
+            currentCoroutineContext()[Job]?.cancel()
             false
         }
 
@@ -424,11 +425,11 @@ suspend fun handleRunControl(): Boolean {
         // not come back, stop rather than loop forever.
         GameRunControl.NETWORK_ERROR -> {
             if (waitForNetwork()) {
-                setRunControl(GameRunControl.RUNNING)
+                SceneState.setRunControl(GameRunControl.RUNNING)
                 true
             } else {
                 ShowMessage("网络长时间未恢复，已停止脚本")
-                currentCoroutineContext().cancel()
+                currentCoroutineContext()[Job]?.cancel()
                 false
             }
         }
@@ -439,7 +440,7 @@ suspend fun handleRunControl(): Boolean {
         GameRunControl.ENTER_HOME_FAILED,
         GameRunControl.SWITCH_ACCOUNT,
         GameRunControl.RESTART_GAME -> {
-            setRunControl(GameRunControl.RUNNING)
+            SceneState.setRunControl(GameRunControl.RUNNING)
             true
         }
 
@@ -451,7 +452,7 @@ suspend fun handleRunControl(): Boolean {
         GameRunControl.IDENTIFY_TH_FAILED -> {
             ShowMessage("遇到需人工处理的异常状态：${control.displayName}，已停止脚本")
             captureDebugSnapshot("异常状态：${control.displayName}（需人工处理，已停止脚本）")
-            currentCoroutineContext().cancel()
+            currentCoroutineContext()[Job]?.cancel()
             false
         }
     }

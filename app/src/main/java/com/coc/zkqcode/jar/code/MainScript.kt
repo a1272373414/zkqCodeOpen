@@ -11,7 +11,7 @@ import com.coc.zkqcode.jar.code.universal.GameVersion
 import com.coc.zkqcode.jar.code.universal.InGamesVars
 import com.coc.zkqcode.jar.code.universal.create.batchCreateAccounts
 import com.coc.zkqcode.jar.code.universal.enterMainScreen
-import com.coc.zkqcode.jar.code.universal.SceneState
+import com.coc.zkqcode.jar.code.universal.handleRunControl
 import com.coc.zkqcode.jar.code.universal.smalltools.StorageKeys
 import com.coc.zkqcode.jar.code.universal.smalltools.getConfigOrStop
 import com.coc.zkqcode.jar.code.universal.smalltools.readMemory
@@ -81,7 +81,7 @@ suspend fun runMainScript() {
 
         // Phase 4 (reused from legacy 游戏运行控制): act on the current run-control state and
         // bail out if the script was stopped (repeated unknown / fatal state).
-        if (!SceneState.handleRunControl()) return
+        if (!handleRunControl()) return
 
         RunShell.runNoOutput("am kill-all")//clean up memory
         // Use labeled block to skip remaining steps on failure

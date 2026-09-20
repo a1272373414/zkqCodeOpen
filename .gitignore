@@ -31,3 +31,8 @@ rust_logic/src/security/keys.rs
 app/encrypt_jar.py
 app/upload_jar.py
 /.workbuddy/
+
+# Python 校准工具产物（截图/字节码不入库）
+__pycache__/
+*.pyc
+tools/captures/

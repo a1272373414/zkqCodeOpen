@@ -50,6 +50,8 @@ import com.coc.zkqcode.jar.code.colorschema.colorpackage.mainbase.IMainBaseBlack
 import com.coc.zkqcode.jar.code.colorschema.colorpackage.mainbase.MainBaseBlackElixirTroopColors
 import com.coc.zkqcode.jar.code.colorschema.colorpackage.mainbase.IMainBaseSuperTroopColors
 import com.coc.zkqcode.jar.code.colorschema.colorpackage.mainbase.MainBaseSuperTroopColors
+import com.coc.zkqcode.jar.code.colorschema.colorpackage.mainbase.IMainBaseTrainCardColors
+import com.coc.zkqcode.jar.code.colorschema.colorpackage.mainbase.MainBaseTrainCardColors
 import com.coc.zkqcode.jar.code.colorschema.colorpackage.builderbase.IBuilderBaseBuildButtonColors
 import com.coc.zkqcode.jar.code.colorschema.colorpackage.builderbase.BuilderBaseBuildButtonColors
 
@@ -63,7 +65,8 @@ object MyColors : IUIColors by UIColors, IFeatureColors by FeatureColors, IMainB
     IMainBaseBlackElixirTroopColors by MainBaseBlackElixirTroopColors,
     IMainBaseSuperTroopColors by MainBaseSuperTroopColors,
     IMainBaseBuildButtonColors by MainBaseBuildButtonColors,
-    IBuilderBaseBuildButtonColors by BuilderBaseBuildButtonColors {
+    IBuilderBaseBuildButtonColors by BuilderBaseBuildButtonColors,
+    IMainBaseTrainCardColors by MainBaseTrainCardColors {
     //Main Base Pets Colors
     val Lassi = ColorSchema.parse(
         175, 385, 1110, 665, "FA51FA", "15|-34|CEA79B,37|-33|AA604D,55|-7|4E322D,81|-6|694337,88|-57|DF6B8F,93|-75|FF85FF,135|-55|834D3F,135|-28|E88E6D,116|-17|C06350", 0, 0.9, "莱希"

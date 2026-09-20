@@ -6,6 +6,7 @@ import com.coc.zkqcode.core.util.basic.delayWithMultiplier
 import com.coc.zkqcode.jar.code.universal.colors.findMultiColors
 import com.coc.zkqcode.jar.code.universal.colors.findMultiColorsUntil
 import com.coc.zkqcode.core.util.touchactions.TouchActions
+import com.coc.zkqcode.jar.code.colorschema.ColorSchema
 import com.coc.zkqcode.jar.code.colorschema.MyColors
 import com.coc.zkqcode.jar.code.universal.InGamesVars
 import com.coc.zkqcode.jar.code.universal.enterMainScreen
@@ -53,6 +54,122 @@ private suspend fun switchTrainingTab(
         ShowMessage("账号${InGamesVars.currentAccountNumber}，切换分页【$tabName】可能失败（未找到特征）")
     }
     return ok
+}
+
+/**
+ * 兵种名 -> 训练卡片特征。
+ *
+ * 迁移自原脚本 `函数275a` 的「造XX」特征（见 [MainBaseTrainCardColors]，77 个），
+ * 原脚本的定位方式是「当前页用该兵种自己的特征找卡片，找不到就翻页（左/中/右）重试」，
+ * 因此**不依赖兵种顺序与位置**：最左侧的活动兵（数量/名称都不固定）不会影响其它兵种的定位。
+ */
+private val TRAIN_CARD: Map<String, ColorSchema> = mapOf(
+    // 圣水兵
+    "野蛮人" to MyColors.TrainCard野蛮, "弓箭手" to MyColors.TrainCard弓箭,
+    "巨人" to MyColors.TrainCard巨人, "哥布林" to MyColors.TrainCard小偷,
+    "炸弹人" to MyColors.TrainCard炸弹, "气球兵" to MyColors.TrainCard气球,
+    "法师" to MyColors.TrainCard法师, "天使" to MyColors.TrainCard天使,
+    "飞龙" to MyColors.TrainCard飞龙, "飞龙宝宝" to MyColors.TrainCard龙宝,
+    "皮卡超人" to MyColors.TrainCard皮卡, "大雪怪" to MyColors.TrainCard雪怪,
+    "掘地矿工" to MyColors.TrainCard矿工, "雷电飞龙" to MyColors.TrainCard雷龙,
+    "巨矛投手" to MyColors.TrainCard巨矛, "雷霆泰坦" to MyColors.TrainCard泰坦,
+    "根蔓骑士" to MyColors.TrainCard根骑, "龙骑士" to MyColors.TrainCard龙骑,
+    "陨石巨人" to MyColors.TrainCard陨石戈仑,
+    // 黑油兵
+    "亡灵" to MyColors.TrainCard亡灵, "女巫" to MyColors.TrainCard女巫,
+    "守护者学徒" to MyColors.TrainCard学徒, "巨石投手" to MyColors.TrainCard投手,
+    "废墟女巫" to MyColors.TrainCard废墟女巫, "德鲁伊" to MyColors.TrainCard鲁伊,
+    "戈仑冰人" to MyColors.TrainCard冰人, "戈仑石人" to MyColors.TrainCard石头,
+    "烈焰熔炉" to MyColors.TrainCard熔炉, "熔岩猎犬" to MyColors.TrainCard猎犬,
+    "瓦基丽武神" to MyColors.TrainCard武神, "英雄猎手" to MyColors.TrainCard猎手,
+    "野猪骑士" to MyColors.TrainCard野猪,
+    // 超级兵
+    "超级野蛮人" to MyColors.TrainCard超蛮, "超级弓箭手" to MyColors.TrainCard超弓,
+    "超级巨人" to MyColors.TrainCard超巨, "隐秘哥布林" to MyColors.TrainCard超偷,
+    "超级炸弹人" to MyColors.TrainCard超炸, "超级法师" to MyColors.TrainCard超法,
+    "超级亡灵" to MyColors.TrainCard超亡, "超级女巫" to MyColors.TrainCard超巫,
+    "超级瓦基丽武神" to MyColors.TrainCard超武, "超级矿工" to MyColors.TrainCard超矿,
+    "超级野猪骑士" to MyColors.TrainCard超猪, "火箭气球兵" to MyColors.TrainCard超球,
+    "超级大雪怪" to MyColors.TrainCard超怪, "超级飞龙" to MyColors.TrainCard超龙,
+    "超级巨石投手" to MyColors.TrainCard超投, "寒冰猎犬" to MyColors.TrainCard超犬,
+)
+
+/** 每种兵的默认造兵次数；队列满后多余点击会被游戏忽略，不会出错。 */
+private val DEFAULT_COUNT = mapOf(
+    "飞龙" to 25, "巨人" to 5, "弓箭手" to 40, "野蛮人" to 40,
+    "哥布林" to 30, "法师" to 10, "掘地矿工" to 10, "飞龙宝宝" to 10,
+    "雷电飞龙" to 10, "天使" to 5, "炸弹人" to 10, "大雪怪" to 10, "皮卡超人" to 5,
+)
+
+/**
+ * 选兵面板内的翻页手势：面板为一屏一页的横向列表（活动兵在最左，圣水兵/黑油兵/超级兵依次向右），
+ * 右滑回最左、左滑进一页。坐标在 emulator-5556 / 1280x720 上标定（2026-09-20）。
+ */
+private const val PAGE_LEFT_X = 120
+private const val PAGE_RIGHT_X = 1180
+private const val PAGE_Y = 560
+private const val PAGE_SWIPE_MS = 400
+
+/**
+ * 选兵面板页数上限。
+ *
+ * 兵种页**不是固定的 3 页**：活动兵是动态的（数量/名称都不固定，且固定占用最左侧卡片），
+ * 会把后续兵种整体右移、必要时多出一页；赛季/活动结束后又会变回。因此这里取一个足够大的上限并
+ * 配合「全部找到就早退 + 连续空页提前结束」，既不会漏掉被挤到后面的兵种，也不会无意义地一直滑。
+ */
+private const val MAX_PICKER_PAGES = 6
+
+/** 连续多少页没找到任何目标兵种就提前结束翻页（避免面板到头后空滑）。 */
+private const val EMPTY_PAGE_LIMIT = 2
+
+/**
+ * 活动兵（可选配置）。活动兵是动态的：数量、名称都随赛季/活动变化，且固定排在最左侧。
+ *
+ * **解耦原则**：即使这里完全没有配置（表为空，或将来接入的配置读取失败/格式变化），
+ * 也只会"不造活动兵"，**不会影响圣水兵/黑油兵/超级兵等原有兵种的定位与造兵** ——
+ * 因为每个原有兵种都是靠自己的训练卡片特征、跨页搜索定位的，不依赖任何绝对位置或兵种顺序。
+ *
+ * 后续接入配置时，只需往这两张表里填「显示名 -> 训练卡片特征／造兵次数」即可，
+ * 无需改动 `mainBaseTrainTroops()` 的主流程。
+ */
+private val EVENT_TROOP_CARDS: Map<String, ColorSchema> = emptyMap()
+private val EVENT_TROOP_COUNTS: Map<String, Int> = emptyMap()
+
+/** 识别为空时的核心造兵计划（避免静默不造兵）。 */
+private val CORE_FALLBACK = listOf("飞龙", "巨人", "弓箭手", "野蛮人")
+
+/** 查兵种对应的训练卡片特征：活动兵配置优先，其次为迁移来的固定兵种表。 */
+private fun trainCardOf(name: String): ColorSchema? = EVENT_TROOP_CARDS[name] ?: TRAIN_CARD[name]
+
+/** 查兵种默认造兵次数。 */
+private fun trainCountOf(name: String): Int =
+    DEFAULT_COUNT[name] ?: EVENT_TROOP_COUNTS[name] ?: 10
+
+/**
+ * 把选兵列表钉回最左页。幂等：已在最左时多余滑动不会越界；次数取 [MAX_PICKER_PAGES]，
+ * 保证活动兵把列表拉长、页数变多时也能回到真正的第一页。
+ */
+private suspend fun pinPickerToFirstPage() {
+    repeat(MAX_PICKER_PAGES) {
+        TouchActions.swipe(PAGE_LEFT_X, PAGE_Y, PAGE_RIGHT_X, PAGE_Y, delayTime = PAGE_SWIPE_MS)
+        delayWithMultiplier(250)
+    }
+}
+
+/** 左滑一页（进入下一页兵种）。 */
+private suspend fun nextPickerPage() {
+    TouchActions.swipe(PAGE_RIGHT_X, PAGE_Y, PAGE_LEFT_X, PAGE_Y, delayTime = PAGE_SWIPE_MS)
+    delayWithMultiplier(350)
+}
+
+/**
+ * 在当前页用 [feature] 定位 [name] 的训练卡片并连点 [times] 次造兵。
+ * @return true 表示当前页找到了该兵种卡片（已点击）。
+ */
+private suspend fun trainTroopOnPage(name: String, feature: ColorSchema, times: Int): Boolean {
+    val p = findMultiColors(feature) ?: return false
+    repeat(times) { TouchActions.tap(p.x, p.y, delayTime = 40) }
+    return true
 }
 
 suspend fun mainBaseTrainTroops(): Boolean {
@@ -103,33 +220,48 @@ suspend fun mainBaseTrainTroops(): Boolean {
         SceneState.setFlowNode("练兵-圣水兵")
         switchTrainingTab(TAB_TROOPS.first, TAB_TROOPS.second, MyColors.TrainBarbarian, "圣水兵")
 
-        // 兵种识别接入：识别当前部队配置（14 槽位）中的兵种并回报，用于核对/日志
-        runCatching {
-            val army = MainBaseArmyRecognizer.recognizeTroopNames()
-            if (army.isNotEmpty()) {
-                ShowMessage("账号${InGamesVars.currentAccountNumber}，当前部队：${army.joinToString("、")}")
-            }
+        // 兵种识别接入：识别当前部队配置（14 槽位）中的兵种，作为造兵依据（"按识别结果造兵"）
+        val recognized = runCatching { MainBaseArmyRecognizer.recognizeTroopNames() }.getOrElse { emptyList() }
+        if (recognized.isNotEmpty()) {
+            ShowMessage("账号${InGamesVars.currentAccountNumber}，当前部队：${recognized.joinToString("、")}")
+        } else {
+            ShowMessage("账号${InGamesVars.currentAccountNumber}，兵种识别为空，回退核心造兵计划")
         }
 
-        for (i in 1..8) {
-            // Priority training check
-            val dragonPoint = findMultiColorsUntil(schemas = listOf(MyColors.TrainDragon, MyColors.TrainDragon2), duration = 100)
-            if (dragonPoint != null) {
-                repeat(25) { TouchActions.tap(dragonPoint.x, dragonPoint.y, delayTime = 40) }
-                break
-            }
-            findMultiColors(schema = MyColors.TrainGiant)?.let { p ->
-                repeat(5) { TouchActions.tap(p.x, p.y, delayTime = 40) }
-            }
-            findMultiColors(schema = MyColors.TrainArcher)?.let { p ->
-                repeat(40) { TouchActions.tap(p.x, p.y, delayTime = 40) }
-            }
-            findMultiColors(schema = MyColors.TrainBarbarian)?.let { p ->
-                repeat(40) { TouchActions.tap(p.x, p.y, delayTime = 40) }
-            }
+        // 按识别出的兵种，去训练列表逐页定位并造兵。
+        // 定位方式沿用原脚本：每个兵种有自己的训练卡片特征（MainBaseTrainCardColors，迁移自「造XX」），
+        // 在当前页找不到就翻页重试 —— 不依赖兵种顺序/位置，最左侧的活动兵（数量/名称不固定）不影响定位。
+        val pending = LinkedHashSet(recognized).mapNotNull { name ->
+            trainCardOf(name)?.let { name to it }
+        }.toMutableList()
+        // 识别为空、或识别出的兵种都没有对应训练卡片（例如当前部队全是不认识的活动兵）时，
+        // 回退核心兵种计划，避免静默不造兵。
+        if (pending.isEmpty()) {
+            ShowMessage("账号${InGamesVars.currentAccountNumber}，识别结果无可用训练卡片，回退核心造兵计划")
+            CORE_FALLBACK.forEach { name -> trainCardOf(name)?.let { pending += name to it } }
+        }
 
-            if (findMultiColors(schema = MyColors.GrayBarbarian) != null) break
-            delayWithMultiplier(300)
+        pinPickerToFirstPage()
+        var page = 1
+        var emptyPages = 0
+        while (pending.isNotEmpty() && page <= MAX_PICKER_PAGES && emptyPages < EMPTY_PAGE_LIMIT) {
+            SceneState.setFlowNode("练兵-第${page}页")
+            var hitsOnPage = 0
+            val pendingIt = pending.iterator()
+            while (pendingIt.hasNext()) {
+                val (name, feature) = pendingIt.next()
+                if (trainTroopOnPage(name, feature, trainCountOf(name))) {
+                    hitsOnPage++
+                    pendingIt.remove()
+                }
+            }
+            if (pending.isEmpty()) break
+            emptyPages = if (hitsOnPage == 0) emptyPages + 1 else 0
+            page++
+            nextPickerPage()
+        }
+        if (pending.isNotEmpty()) {
+            ShowMessage("账号${InGamesVars.currentAccountNumber}，未找到训练卡片：${pending.joinToString("、") { it.first }}")
         }
 
         // Close tab and Clean Queue 2
