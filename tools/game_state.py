@@ -11,6 +11,15 @@ import re
 import subprocess
 import time
 
+import sys
+
+# Windows 控制台默认 GBK，中文 print 会乱码 —— 统一改成 UTF-8（所有引用本模块的工具都受益）
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
 import cv2
 import numpy as np
 
@@ -68,15 +77,29 @@ def parse_file(path, names=None):
         if names is not None and name not in names:
             continue
         rx1, ry1, rx2, ry2 = (int(m.group(i)) for i in (2, 3, 4, 5))
-        anchor = np.array([int(m.group(6)[0:2], 16), int(m.group(6)[2:4], 16), int(m.group(6)[4:6], 16)], dtype=np.int16)
+        anchor = hex_arr(m.group(6))
         offs = []
         for tok in m.group(7).split(','):
             if not tok:
                 continue
             dx, dy, h = tok.split('|')
-            offs.append((int(dx), int(dy), np.array([int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)], dtype=np.int16)))
+            offs.append((int(dx), int(dy), hex_arr(h)))
         out.append((name, (rx1, ry1, rx2, ry2), anchor, offs))
     return out
+
+
+def hex_arr(h):
+    """
+    把 ColorSchema 的 6 位十六进制按**书写顺序**逐字节解析，并与 cv2 读入的通道顺序（B,G,R）比较。
+    这是与 App 一致的实测口径：App 里这些特征（含生产在用的 FeatureColors/MainBaseTraining）
+    在同样的"逐字节比较"下稳定命中（例如 `TrainBarbarian` 用于 `panel_open` 判面板开合）。
+    """
+    return np.array([int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)], dtype=np.int16)
+
+
+def hex_of(px):
+    """图像像素（cv2 的 B,G,R 顺序）-> 与上面同口径的十六进制字符串。"""
+    return '%02X%02X%02X' % (int(px[0]), int(px[1]), int(px[2]))
 
 
 def collect(scan, anchor, offs):
@@ -185,3 +208,42 @@ def ensure_online(dt=18):
     print('检测到掉线弹窗 → 点击"重新载入游戏"')
     tap(RELOAD_BTN[0], RELOAD_BTN[1], dt=dt)
     return True
+
+
+def close_dialogs(max_rounds=3):
+    """关掉挡住界面的弹窗（RedX / 通用对话框，例如误点卡片"i"打开的兵种详情）。"""
+    for _ in range(max_rounds):
+        img = cv2.imread(cap('dlg.png'))
+        h = find_first(img, _feat_redx)
+        if h:
+            print('  关闭弹窗 RedX@(%d,%d)' % (h[1], h[2]))
+            tap(h[1], h[2], dt=1.2)
+            continue
+        h = find_first(img, _feat_dialog)
+        if h:
+            print('  关闭通用对话框@(%d,%d)' % (h[1], h[2]))
+            tap(h[1] + 960, h[2] + 30, dt=1.2)
+            continue
+        return True
+    return False
+
+
+def ensure_picker(tab_xy, verify_feat, max_try=3):
+    """回到训练页并打开 [tab_xy] 对应的选兵面板（用 [verify_feat] 验证是否已打开）。"""
+    for _ in range(max_try):
+        ensure_online()
+        close_dialogs()
+        img = cv2.imread(cap('pk0.png'))
+        if page_of(img) == 'main_village':
+            h = find_first(img, _feat_train_troops)
+            if h:
+                tap(h[1], h[2], dt=2.5)
+                img = cv2.imread(cap('pk1.png'))
+        if verify_feat is not None and find_first(img, [verify_feat]):
+            return True
+        if panel_open(img):
+            tap(219, 139, dt=1.0)      # 先关掉当前面板，避免"点开又关掉"
+        tap(tab_xy[0], tab_xy[1], dt=1.5)
+        if verify_feat is None or find_first(cv2.imread(cap('pk2.png')), [verify_feat]):
+            return True
+    return False

@@ -208,22 +208,49 @@ private suspend fun trainByFeatures(label: String, plan: List<TrainTarget>) {
 }
 
 /**
- * 法术默认造兵计划。原先是对 3 个写死坐标点共 8 次（换设备/列表变化即失效），
- * 现改为按「闪电法术」的训练卡片特征定位后连点 8 次；要调整造什么法术只改这张表。
+ * 法术显示名 -> 训练卡片特征（迁移自原脚本「造XX」，2026-09-21 在真机全量校验 18/18 命中）。
  */
-private val SPELL_PLAN = listOf(TrainTarget("闪电法术", MyColors.TrainCard雷电, 8))
+private val SPELL_CARD: Map<String, ColorSchema> = mapOf(
+    "闪电法术" to MyColors.TrainCard雷电, "冰冻法术" to MyColors.TrainCard冰冻,
+    "冰障法术" to MyColors.TrainCard冰障, "地震法术" to MyColors.TrainCard地震,
+    "毒药法术" to MyColors.TrainCard毒药, "疗伤法术" to MyColors.TrainCard疗伤,
+    "弹跳法术" to MyColors.TrainCard弹跳, "急速法术" to MyColors.TrainCard急速,
+    "狂暴法术" to MyColors.TrainCard狂暴, "镜像法术" to MyColors.TrainCard镜像,
+    "隐形法术" to MyColors.TrainCard隐形, "回溯法术" to MyColors.TrainCard回溯,
+    "图腾法术" to MyColors.TrainCard图腾, "愤怒法术" to MyColors.TrainCard愤怒法术,
+    "骷髅法术" to MyColors.TrainCard骷髅, "蝙蝠法术" to MyColors.TrainCard蝙蝠,
+    "复苏法术" to MyColors.TrainCard复苏, "蔓生法术" to MyColors.TrainCard蔓生,
+)
+
+/**
+ * 攻城器显示名 -> 训练卡片特征（2026-09-21 在真机全量校验 9/9 命中；列表向右还有内容，需翻页）。
+ */
+private val SIEGE_CARD: Map<String, ColorSchema> = mapOf(
+    "攻城战车" to MyColors.TrainCard战车, "战斗飞艇" to MyColors.TrainCard飞艇,
+    "攻城气球" to MyColors.TrainCard战球, "攻城兵营" to MyColors.TrainCard战营,
+    "滚木发射器" to MyColors.TrainCard滚木, "烈焰喷射器" to MyColors.TrainCard烈焰,
+    "战斗钻机" to MyColors.TrainCard钻机, "空中战车" to MyColors.TrainCard空中战车,
+    "部队发射器" to MyColors.TrainCard部队发射器,
+)
+
+/**
+ * 法术默认造兵计划。原先是对 3 个写死坐标点共 8 次（换设备/列表变化即失效），
+ * 现改为按「闪电法术」的训练卡片特征定位后连点 8 次；要调整造什么法术只改这张表
+ * （可选法术见 [SPELL_CARD]，已全量校验）。
+ */
+/** 每种法术的默认造兵次数；不在表里的法术默认不造（随时可在此开启）。 */
+private val SPELL_COUNTS = mapOf("闪电法术" to 8)
+
+private val SPELL_PLAN = SPELL_CARD
+    .map { (name, feature) -> TrainTarget(name, feature, SPELL_COUNTS[name] ?: 0) }
+    .filter { it.times > 0 }
 
 /**
  * 攻城器默认造兵计划：原先是对 4 个写死坐标各点 1 次（即每种造 1 个），
- * 现改为按特征定位——页内找到几种就各造 1 个，找不到的会被记录（不静默失败）。
+ * 现改为按特征定位——每种造 1 个，找不到的会被记录（不静默失败）。
+ * 9 种已全部校验可定位（含右滑后的第 2 页）。
  */
-private val SIEGE_PLAN = listOf(
-    TrainTarget("攻城战车", MyColors.TrainCard战车, 1),
-    TrainTarget("战斗飞艇", MyColors.TrainCard飞艇, 1),
-    TrainTarget("攻城气球", MyColors.TrainCard战球, 1),
-    TrainTarget("空中战车", MyColors.TrainCard空中战车, 1),
-    TrainTarget("钻地机器", MyColors.TrainCard钻机, 1),
-)
+private val SIEGE_PLAN = SIEGE_CARD.map { (name, feature) -> TrainTarget(name, feature, 1) }
 
 suspend fun mainBaseTrainTroops(): Boolean {
     val isAttackEnabled = getBooleanConfigRuntime(Schema.MAIN_BASE_SETTINGS.AUTO_ATTACK.key)
