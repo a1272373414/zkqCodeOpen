@@ -123,17 +123,24 @@ private const val MAX_PICKER_PAGES = 6
 private const val EMPTY_PAGE_LIMIT = 2
 
 /**
- * 活动兵（可选配置）。活动兵是动态的：数量、名称都随赛季/活动变化，且固定排在最左侧。
+ * 活动内容（可选配置）：活动兵 / 活动法术 / 活动攻城器。
  *
- * **解耦原则**：即使这里完全没有配置（表为空，或将来接入的配置读取失败/格式变化），
- * 也只会"不造活动兵"，**不会影响圣水兵/黑油兵/超级兵等原有兵种的定位与造兵** ——
- * 因为每个原有兵种都是靠自己的训练卡片特征、跨页搜索定位的，不依赖任何绝对位置或兵种顺序。
+ * 活动内容是**动态**的：数量、名称随赛季/活动变化，且**固定排在最左侧**，会把后续内容整体右移、
+ * 必要时多出一页（已实测：攻城器 9 种就跨 2 页）。
  *
- * 后续接入配置时，只需往这两张表里填「显示名 -> 训练卡片特征／造兵次数」即可，
- * 无需改动 `mainBaseTrainTroops()` 的主流程。
+ * **解耦原则**：这三张表默认为空；无论有没有配置、配置是否过期，都只会"不造该活动内容"，
+ * **不会影响原有兵种/法术/攻城器的定位与造兵** ——
+ * 因为每一条都是靠**自己的训练卡片特征跨页搜索**定位的，不依赖任何绝对位置或顺序；
+ * 识别结果里出现未知名称时只是被跳过（不可能误点其它卡片）。
+ *
+ * 后续接入配置时，只需往表里填「显示名 -> 训练卡片特征／造兵次数」即可，主流程无需改动。
  */
 private val EVENT_TROOP_CARDS: Map<String, ColorSchema> = emptyMap()
 private val EVENT_TROOP_COUNTS: Map<String, Int> = emptyMap()
+private val EVENT_SPELL_CARDS: Map<String, ColorSchema> = emptyMap()
+private val EVENT_SPELL_COUNTS: Map<String, Int> = emptyMap()
+private val EVENT_SIEGE_CARDS: Map<String, ColorSchema> = emptyMap()
+private val EVENT_SIEGE_COUNTS: Map<String, Int> = emptyMap()
 
 /** 识别为空时的核心造兵计划（避免静默不造兵）。 */
 private val CORE_FALLBACK = listOf("飞龙", "巨人", "弓箭手", "野蛮人")
@@ -241,16 +248,25 @@ private val SIEGE_CARD: Map<String, ColorSchema> = mapOf(
 /** 每种法术的默认造兵次数；不在表里的法术默认不造（随时可在此开启）。 */
 private val SPELL_COUNTS = mapOf("闪电法术" to 8)
 
-private val SPELL_PLAN = SPELL_CARD
-    .map { (name, feature) -> TrainTarget(name, feature, SPELL_COUNTS[name] ?: 0) }
+/**
+ * 法术造兵计划 = 固定 18 种法术（[SPELL_CARD]）+ 可选的活动法术（[EVENT_SPELL_CARDS]）。
+ *
+ * 活动法术固定出现在最左侧、名称与数量都不固定：即使我们完全不认识它（表里没配置），
+ * 也只是"不造它"，**不会影响这些固定法术**——每条都是靠自己的特征跨页查找，不看位置与顺序。
+ */
+private val SPELL_PLAN = (SPELL_CARD + EVENT_SPELL_CARDS)
+    .map { (name, feature) ->
+        TrainTarget(name, feature, SPELL_COUNTS[name] ?: EVENT_SPELL_COUNTS[name] ?: 0)
+    }
     .filter { it.times > 0 }
 
 /**
- * 攻城器默认造兵计划：原先是对 4 个写死坐标各点 1 次（即每种造 1 个），
- * 现改为按特征定位——每种造 1 个，找不到的会被记录（不静默失败）。
- * 9 种已全部校验可定位（含右滑后的第 2 页）。
+ * 攻城器造兵计划 = 固定 9 种（[SIEGE_CARD]）+ 可选的活动攻城器（[EVENT_SIEGE_CARDS]），默认每种 1 个。
+ * 原先是对 4 个写死坐标各点 1 次；现改为按特征定位，找不到的会被记录（不静默失败）。
+ * 9 种已全部校验可定位（含左滑后的第 2 页），活动内容同理不影响固定项。
  */
-private val SIEGE_PLAN = SIEGE_CARD.map { (name, feature) -> TrainTarget(name, feature, 1) }
+private val SIEGE_PLAN = (SIEGE_CARD + EVENT_SIEGE_CARDS)
+    .map { (name, feature) -> TrainTarget(name, feature, EVENT_SIEGE_COUNTS[name] ?: 1) }
 
 suspend fun mainBaseTrainTroops(): Boolean {
     val isAttackEnabled = getBooleanConfigRuntime(Schema.MAIN_BASE_SETTINGS.AUTO_ATTACK.key)
