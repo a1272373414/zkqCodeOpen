@@ -16,7 +16,9 @@ import com.coc.zkqcode.statehelper.AppMode
 import com.coc.zkqcode.statehelper.AppStateManager
 import android.os.Build
 import dalvik.system.DexClassLoader
+import dalvik.system.InMemoryDexClassLoader
 import com.coc.zkqcode.core.util.fileactions.LogHelper
+import java.nio.ByteBuffer
 import timber.log.Timber
 import java.io.File
 
@@ -109,9 +111,13 @@ class Loadjar(private val context: Context) {
             // Android 16+ requires DEX files to be non-writable
             jarFile.setReadOnly()
 
-            // Load the jar using DexClassLoader
+            // Load the jar with a parent that HIDES the plugin classes: the plugin sources are also
+            // compiled into the host APK, so a plain parent-first parent would always return the
+            // APK's (stale) copy and the JAR hot-update would never take effect.
+            // See PluginHidingClassLoader.
             val classLoader = DexClassLoader(
-                jarFile.absolutePath, dexOutputDir.absolutePath, null, context.classLoader
+                jarFile.absolutePath, dexOutputDir.absolutePath, null,
+                PluginHidingClassLoader(context.classLoader)
             )
 
             // Load the plugin implementation class
@@ -157,8 +163,8 @@ class Loadjar(private val context: Context) {
                     return false
                 }
 
-                val buffer = java.nio.ByteBuffer.wrap(dexBytes)
-                dalvik.system.InMemoryDexClassLoader(buffer, context.classLoader)
+                val buffer = ByteBuffer.wrap(dexBytes)
+                InMemoryDexClassLoader(buffer, PluginHidingClassLoader(context.classLoader))
             } else {
                 // 4. Fallback for older versions: Use in-memory file descriptor (memfd/ashmem)
                 LogHelper.showDebugInfo(
@@ -184,7 +190,8 @@ class Loadjar(private val context: Context) {
                 LogHelper.showDebugInfo("loadEncryptedPlugin: Loading from $dexPath")
 
                 DexClassLoader(
-                    dexPath, dexOutputDir.absolutePath, null, context.classLoader
+                    dexPath, dexOutputDir.absolutePath, null,
+                    PluginHidingClassLoader(context.classLoader)
                 )
             }
 
@@ -251,5 +258,30 @@ class Loadjar(private val context: Context) {
         }
 
         return assetsDir
+    }
+}
+
+/** Package prefix of everything that the hot-update JAR ships. */
+private const val PLUGIN_PACKAGE = "com.coc.zkqcode.jar."
+
+/**
+ * Parent loader for the hot-update JAR that HIDES the plugin classes.
+ *
+ * The plugin sources are also part of the host APK (the `com/coc/zkqcode/jar` source folder), so the
+ * APK dex contains a copy of every plugin class. `DexClassLoader` / `InMemoryDexClassLoader` are
+ * parent-first, which means that copy would always win and every `encrypted_*.jar` hot-update would
+ * be silently ignored - only reinstalling the APK changed plugin behaviour.
+ *
+ * By refusing the plugin package here, the JAR's own `findClass` is the only remaining source for
+ * those names, so the freshly built JAR always wins. Every other name (MainCode, GlobalVars,
+ * TouchActions, RustTools, androidx, kotlin, ...) is still resolved by [delegate], so the class
+ * identity of the host APIs the plugin talks to does not change.
+ */
+private class PluginHidingClassLoader(private val delegate: ClassLoader) : ClassLoader(delegate) {
+    override fun loadClass(name: String, resolve: Boolean): Class<*> {
+        // Not "return super.loadClass(...)" on purpose: the plugin must come from the JAR, and the
+        // JAR's own loader falls back to this parent for anything it does not ship.
+        if (name.startsWith(PLUGIN_PACKAGE)) throw ClassNotFoundException(name)
+        return delegate.loadClass(name)
     }
 }
