@@ -10,7 +10,7 @@ import time
 import cv2
 
 from game_state import (cap, tap, find_first, page_of, keyevent, F_FEATURE,
-                        ensure_online, close_dialogs, parse_file)
+                        ensure_online, close_dialogs, parse_file, ensure_main_village)
 from attack_feats import bar_feats
 
 PKG = os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -59,6 +59,11 @@ def ensure_search_opponents(max_rounds=12):
             tap(ATTACK_IN_VILLAGE[0], ATTACK_IN_VILLAGE[1], dt=2.2)
             continue
         page = page_of(img)
+        if page == 'night_village':
+            # 打鱼流程只走主世界；在夜世界时按返回键会弹"退出游戏"，必须先切回主世界。
+            print('  第%d轮 在夜世界 → 切回主世界' % (i + 1))
+            ensure_main_village()
+            continue
         print('  第%d轮 page=%s → 关弹窗/BACK' % (i + 1, page))
         if page == 'popup':
             close_dialogs()

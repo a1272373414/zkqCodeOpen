@@ -1,9 +1,15 @@
 # -*- coding: utf-8 -*-
 """Shared ground-truth helpers: page detection + safe recovery to training page.
 
-Page detection mirrors SceneState.kt detectCurrentScene():
-  MAIN_VILLAGE  = MyColors.TrainTroops hit            (FeatureColors.kt)
-  TRAINING_PAGE = TrainingPage / AttackInTrainingPage* (MainBaseTraining.kt)
+Page detection mirrors SceneState.kt detectCurrentScene() / detectVillage():
+  village FIRST (village-only builder icons) —— 训练部队按钮在主世界/夜世界/都城都会命中，
+  不能用来判断所属村庄，所以先问"哪个村庄"：
+    NIGHT_VILLAGE = BuilderBaseWorker / BuilderBaseWorker2          (BuilderBaseUpgradeColors.kt)
+    MAIN_VILLAGE  = MainBaseWorker/2/3 / GoblinWorker               (MainBaseUpgradeColors.kt)
+                    / GoblinResearcher                              (MainBaseResearchColors.kt)
+  TRAINING_PAGE = TrainingPage / AttackInTrainingPage*              (MainBaseTraining.kt)
+  BATTLE        = AttackButton (进攻！)                             (MainBaseAttackColors.kt)
+  fallback      = MyColors.TrainTroops hit -> main_village          (FeatureColors.kt)
   POPUP         = RedX (UIColors.kt) / CommonDialog (FeatureColors.kt)
 """
 import os
@@ -33,6 +39,10 @@ PKG = os.path.join(ROOT, r"app\src\main\java\com\coc\zkqcode\jar\code\colorschem
 F_FEATURE = os.path.join(PKG, "FeatureColors.kt")
 F_UI = os.path.join(PKG, "UIColors.kt")
 F_TRAINING = os.path.join(PKG, r"mainbase\MainBaseTraining.kt")
+F_ATTACK = os.path.join(PKG, r"mainbase\MainBaseAttackColors.kt")
+F_UPGRADE = os.path.join(PKG, r"mainbase\MainBaseUpgradeColors.kt")
+F_RESEARCH = os.path.join(PKG, r"mainbase\MainBaseResearchColors.kt")
+F_BB_UPGRADE = os.path.join(PKG, r"builderbase\BuilderBaseUpgradeColors.kt")
 F_TRAIN_BTN = os.path.join(PKG, r"mainbase\MainBaseTrainCardColors.kt")
 F_BLACK = os.path.join(PKG, r"mainbase\MainBaseBlackElixirTroopColors.kt")
 F_SUPER = os.path.join(PKG, r"mainbase\MainBaseSuperTroopColors.kt")
@@ -138,17 +148,142 @@ _feat_reload = parse_file(F_UI, {"ReloadGameButton"})
 _feat_training = parse_file(F_TRAINING, {"TrainingPage", "AttackInTrainingPage",
                                          "AttackInTrainingPage2", "AttackInTrainingPage3"})
 _feat_trainbarb = parse_file(F_TRAINING, {"TrainBarbarian"})
+_feat_attack_button = parse_file(F_ATTACK, {"AttackButton"})
+
+# --- 所属村庄识别（与 Kotlin SceneState.detectVillage 同源）---
+# 主世界 / 夜世界 各由一组「村庄独有」的工人图标决定。
+# 注意：训练部队按钮（FeatureColors.TrainTroops）在主世界、夜世界、都城都会命中，
+# 只能说明"这是某个村庄 HUD"，不能说明是哪个村庄 —— 这正是旧 page_of 把夜世界误判成
+# 主村庄的原因（见 SceneState.kt 的 Village / detectVillage 注释）。
+_feat_worker_night = parse_file(F_BB_UPGRADE, {"BuilderBaseWorker", "BuilderBaseWorker2"})
+_feat_worker_main = (parse_file(F_UPGRADE, {"MainBaseWorker", "MainBaseWorker2",
+                                            "MainBaseWorker3", "GoblinWorker"})
+                     + parse_file(F_RESEARCH, {"GoblinResearcher"}))
+
+
+def village_of(img):
+    """'main' / 'night' / 'unknown'：只用村庄独有工人图标判断（同 Kotlin detectVillage）。"""
+    if find_first(img, _feat_worker_night):
+        return "night"
+    if find_first(img, _feat_worker_main):
+        return "main"
+    return "unknown"
 
 
 def page_of(img):
-    """Returns one of: main_village / training / popup / unknown."""
-    if find_first(img, _feat_train_troops):
+    """Returns one of: main_village / night_village / training / battle / popup / unknown.
+
+    顺序与 Kotlin SceneState.detectCurrentScene() 一致：
+      ① 先问所属村庄（村庄独有工人图标）→ night_village / main_village
+      ② 练兵页（TrainingPage / AttackInTrainingPage*）
+      ③ 战斗页（AttackButton）
+      ④ 兜底：训练部队按钮（主世界/夜世界/都城都有）→ main_village
+      ⑤ 本工具额外区分：可关闭的弹窗 → popup
+         （Kotlin 侧弹窗由 sweepBlockingPopups() 关闭、不作为场景，这里保留便于脚本处理）
+    """
+    v = village_of(img)
+    if v == "night":
+        return "night_village"
+    if v == "main":
         return "main_village"
     if find_first(img, _feat_training):
         return "training"
+    if find_first(img, _feat_attack_button):
+        return "battle"
+    if find_first(img, _feat_train_troops):
+        return "main_village"
     if find_first(img, _feat_redx) or find_first(img, _feat_dialog):
         return "popup"
     return "unknown"
+
+
+def in_village(img):
+    """是否停在某个村庄 HUD（主世界或夜世界）——「训练部队」按钮在两个村庄都能点。"""
+    return page_of(img) in ("main_village", "night_village")
+
+
+_last_back_at = 0.0          # 未知弹窗兜底的限流时间戳（同 Kotlin UNKNOWN_OVERLAY_BACK_INTERVAL_MS）
+
+
+def detect_page(rounds=2, name="detect.png", back_fallback=False, back_interval=8.0):
+    """同 Kotlin SceneState.detectCurrentScene()。
+
+    ① 村庄判不出时先关可关闭弹窗（close_dialogs：训练页上的 RedX 会被跳过），再重新识别一次；
+    ② [back_fallback] 打开时，若识别不出任何已知页面，则按返回键兜底关闭"认不出的弹窗"
+       （与 Kotlin dismissUnknownOverlayWithBack 一致：战斗中不按、且做时间间隔限流）。
+       Kotlin 侧始终开启；工具侧默认关闭，避免影响交互式调试。
+    """
+    global _last_back_at
+    img = cv2.imread(cap(name))
+    for _ in range(max(0, rounds - 1)):
+        if village_of(img) != "unknown":
+            break
+        hit = find_first(img, _feat_redx)
+        if hit and not find_first(img, _feat_training):
+            tap(hit[1], hit[2], dt=1.2)
+        else:
+            hit = find_first(img, _feat_dialog)
+            if not hit:
+                break
+            tap(hit[1] + 960, hit[2] + 30, dt=1.2)
+        img = cv2.imread(cap(name))
+    page = page_of(img)
+    if page == "unknown" and back_fallback and time.time() - _last_back_at >= back_interval:
+        _last_back_at = time.time()
+        print("  页面无法识别 → 按返回键尝试关闭未知弹窗")
+        keyevent(4, dt=1.5)
+        img = cv2.imread(cap(name))
+        page = page_of(img)
+    print("  识别页面 = %s（村庄 = %s）" % (page, village_of(img)))
+    return page
+
+
+def ensure_night_village(max_rounds=5):
+    """从主世界切到夜世界（同 Kotlin enterBuilderBase：先把视角拉远，再点"去夜世界"的木船）。
+
+    注意：缩放需要多点手势（adb 的 `input swipe` 做不了），这里只做 Kotlin
+    zoomSmallMainBase 里的两次平移；实测在当前视角下平移后点 (317,474) 即可上船。
+    """
+    for _ in range(max_rounds):
+        img = cv2.imread(cap('env0.png'))
+        if village_of(img) == "night":
+            return True
+        tap(1279, 100, dt=0.6)                      # clickRightBottom(1)
+        swipe(200, 500, 950, -500, dur=500, dt=1.0)  # zoomSmallMainBase 的平移
+        swipe(218, 523, 939, 162, dur=500, dt=1.0)
+        for x, y in ((317, 474), (336, 512), (313, 568), (300, 450), (330, 540)):
+            tap(x, y, dt=1.6)
+            if village_of(cv2.imread(cap('env1.png'))) == "night":
+                return True
+    return village_of(cv2.imread(cap('env2.png'))) == "night"
+
+
+def ensure_main_village(max_rounds=6):
+    """从夜世界（或其它页面）回到主世界（同 Kotlin enterMainBase 的点击序列）。
+
+    注意：Kotlin enterMainBase 在点击前会先 zoomSmallBuilderBase()，其中包含一次双指缩小
+    （TouchActions.pinchIn，需要多点触控）。模拟器的 adb input 只支持单指 tap/swipe，无法做
+    双指缩放，因此在未缩小的视角下「回主世界」的船可能不在下方网格覆盖的范围内 —— 这是工具侧
+    的输入限制，不影响 App 内 enterMainBase()（App 走 root uinput 多点注入）。若切不回去，
+    请直接在模拟器里手动切回主世界再运行脚本。
+    """
+    for _ in range(max_rounds):
+        img = cv2.imread(cap('emv0.png'))
+        if village_of(img) == "main":
+            return True
+        tap(1279, 100, dt=0.6)                      # clickRightBottom(1)
+        if village_of(cv2.imread(cap('emv1.png'))) == "main":
+            return True
+        # 夜世界地图右上角的「回营 / 船」热点（同 Kotlin enterMainBase）
+        swipe(750, 150, 750, 550, dur=500, dt=0.8)
+        for x in range(960, 1001, 30):
+            for y in range(35, 211, 30):
+                tap(x, y, dt=0.05)
+        for x in range(1000, 1051, 30):
+            for y in range(250, 331, 30):
+                tap(x, y, dt=0.05)
+        time.sleep(0.5)
+    return village_of(cv2.imread(cap('emv2.png'))) == "main"
 
 
 def panel_open(img):
@@ -168,6 +303,12 @@ def recover_to_training(max_rounds=8):
             img = cv2.imread(cap("state.png"))
             if page_of(img) == "training":
                 return True
+            continue
+        if page == "night_village":
+            # 本工具链的用例都针对主世界的练兵页；夜世界的「训练部队」会打开夜世界选兵面板，
+            # 所以先切回主世界（同 Kotlin enterMainBase）。
+            print('  当前在夜世界 → 先切回主世界')
+            ensure_main_village()
             continue
         if page == "popup":
             hit = find_first(img, _feat_redx) or find_first(img, _feat_dialog)
@@ -221,14 +362,19 @@ def ensure_online(dt=18):
 
 
 def close_dialogs(max_rounds=3):
-    """关掉挡住界面的弹窗（RedX / 通用对话框，例如误点卡片"i"打开的兵种详情）。"""
+    """关掉挡住界面的弹窗（RedX / 通用对话框，例如误点卡片"i"打开的兵种详情）。
+
+    与 Kotlin sweepBlockingPopups 一致：训练部队页面右上角也有一个"红叉"（点它是关闭训练页），
+    它同样会被 RedX 特征命中（实机 (1217,65)），这里必须跳过，否则会把训练页本身关掉。
+    """
     for _ in range(max_rounds):
         img = cv2.imread(cap('dlg.png'))
-        h = find_first(img, _feat_redx)
-        if h:
-            print('  关闭弹窗 RedX@(%d,%d)' % (h[1], h[2]))
-            tap(h[1], h[2], dt=1.2)
-            continue
+        if not find_first(img, _feat_training):
+            h = find_first(img, _feat_redx)
+            if h:
+                print('  关闭弹窗 RedX@(%d,%d)' % (h[1], h[2]))
+                tap(h[1], h[2], dt=1.2)
+                continue
         h = find_first(img, _feat_dialog)
         if h:
             print('  关闭通用对话框@(%d,%d)' % (h[1], h[2]))
@@ -244,7 +390,7 @@ def ensure_picker(tab_xy, verify_feat, max_try=3):
         ensure_online()
         close_dialogs()
         img = cv2.imread(cap('pk0.png'))
-        if page_of(img) == 'main_village':
+        if in_village(img):
             h = find_first(img, _feat_train_troops)
             if h:
                 tap(h[1], h[2], dt=2.5)

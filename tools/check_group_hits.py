@@ -38,7 +38,7 @@ def open_group(tab, keys):
         ensure_online()
         close_dialogs()
         img = cv2.imread(cap('cg0.png'))
-        if page_of(img) == 'main_village':
+        if page_of(img) in ('main_village', 'night_village'):
             h = find_first(img, _feat_train_troops)
             if h:
                 tap(h[1], h[2], dt=2.5)

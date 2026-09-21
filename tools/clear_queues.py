@@ -34,7 +34,7 @@ def clear(img):
 def main():
     ensure_online()
     img = cv2.imread(cap('cq0.png'))
-    if page_of(img) == 'main_village':
+    if page_of(img) in ('main_village', 'night_village'):
         h = find_first(img, _feat_train_troops)
         if h:
             print('主村庄 → 打开训练页 (TrainTroops@%d,%d)' % (h[1], h[2]))

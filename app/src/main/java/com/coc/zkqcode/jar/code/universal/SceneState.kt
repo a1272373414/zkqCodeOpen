@@ -14,6 +14,7 @@ import com.coc.zkqcode.jar.code.universal.InGamesVars
 import com.coc.zkqcode.jar.code.universal.colors.findMultiColors
 import com.coc.zkqcode.jar.code.universal.smalltools.isGameAtFront
 import com.coc.zkqcode.jar.code.universal.smalltools.runGame
+import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
@@ -195,8 +196,14 @@ suspend fun detectVillage(byteBuffer: ScreenCaptureManager.CaptureResult? = null
  * [detectVillage]), because the 训练部队 button that used to be the main-village marker also
  * exists in the night village and in the clan capital — using it first made the night village be
  * reported as 主村庄 (and `waitForScene(MAIN_VILLAGE)` succeed while standing in the night village).
- * When a dismissible popup hides the builder-icon row (village undecidable), the popup is swept
- * away first ([sweepBlockingPopups]) and the village is then re-detected on a fresh capture.
+ *
+ * Then the known non-village pages are classified (练兵页 / 战斗页), and only afterwards — when the
+ * page is still undecided — are dialogs closed and the village re-detected, because a popup can
+ * hide the builder-icon row. The 练兵页 must be classified BEFORE that step: its own top-right X
+ * matches `MyColors.RedX`, so a "close dialogs" pass on that page would close the page itself.
+ *
+ * As a last resort, an overlay that [sweepBlockingPopups] cannot recognize (e.g. the 选择英雄
+ * dialog) is dismissed with BACK ([dismissUnknownOverlayWithBack]).
  *
  * @param byteBuffer optional pre-captured screen; a fresh capture is taken when null.
  * @return the detected [GameScene].
@@ -207,44 +214,50 @@ suspend fun detectCurrentScene(byteBuffer: ScreenCaptureManager.CaptureResult? =
         ?: return GameScene.UNKNOWN
 
     // 1. Village screen: decide 主世界 / 夜世界 by village-specific markers only.
-    var village = detectVillage(screen)
-    // A popup / overlay hides the builder-icon row, which leaves the village undecidable and would
-    // let the ambiguous 训练部队 button label a night village as 主村庄. The legacy script closes
-    // dialogs (函数58a/47a) BEFORE asking 是否主村庄界面 / 是否夜村庄界面, so do the same here:
-    // close every dismissible popup first (a no-op when there is none) and then ask the village
-    // question again on a fresh capture.
-    if (village == Village.UNKNOWN && sweepBlockingPopups()) {
-        (ScreenCaptureManager.capture(asBitmap = false) as? ScreenCaptureManager.CaptureResult)?.let {
-            screen = it
-            village = detectVillage(it)
-        }
-    }
-    when (village) {
+    when (detectVillage(screen)) {
         Village.NIGHT -> return GameScene.BUILDER_BASE
         Village.MAIN -> return GameScene.MAIN_VILLAGE
         Village.UNKNOWN -> Unit
     }
 
-    // 2. Training page: left bar (训练部队页面) or the in-training 进攻 button.
-    if (findMultiColors(byteBuffer = screen, schema = MyColors.TrainingPage, increment = 1) != null ||
-        findMultiColors(byteBuffer = screen, schema = MyColors.AttackInTrainingPage, increment = 1) != null ||
-        findMultiColors(byteBuffer = screen, schema = MyColors.AttackInTrainingPage2, increment = 1) != null ||
-        findMultiColors(byteBuffer = screen, schema = MyColors.AttackInTrainingPage3, increment = 1) != null
-    ) {
-        return GameScene.TRAINING_PAGE
-    }
+    // 2. Training page (练兵页 / 我的军队): left bar or the in-training 进攻 button.
+    if (isTrainingPageOnScreen(screen)) return GameScene.TRAINING_PAGE
 
     // 3. Battle: the full 进攻！ launch button (distinct from the training-page 进攻 button).
     if (findMultiColors(byteBuffer = screen, schema = MyColors.AttackButton, increment = 1) != null) {
         return GameScene.BATTLE
     }
 
-    // 4. Last-resort village HUD fallback: the bottom-left 训练部队 button only tells us "this is
+    // 4. Still undecided: a popup covering the builder-icon row is the most likely cause, and it
+    //    would also let the ambiguous 训练部队 button mislabel a night village as 主村庄. The legacy
+    //    script closes dialogs (函数58a/47a) BEFORE asking 是否主村庄界面 / 是否夜村庄界面, so do the
+    //    same: close every dismissible popup (a no-op when there is none) and ask again.
+    if (sweepBlockingPopups()) {
+        (ScreenCaptureManager.capture(asBitmap = false) as? ScreenCaptureManager.CaptureResult)?.let {
+            screen = it
+            when (detectVillage(it)) {
+                Village.NIGHT -> return GameScene.BUILDER_BASE
+                Village.MAIN -> return GameScene.MAIN_VILLAGE
+                Village.UNKNOWN -> Unit
+            }
+        }
+    }
+
+    // 5. Last-resort village HUD fallback: the bottom-left 训练部队 button only tells us "this is
     //    some village HUD" (it also exists in the night village / clan capital), so it is checked
     //    only after the village-specific markers above were ruled out — e.g. when the builder row
     //    is hidden by a panel. 都城 intentionally falls through to here.
     if (findMultiColors(byteBuffer = screen, schema = MyColors.TrainTroops, increment = 1) != null) {
         return GameScene.MAIN_VILLAGE
+    }
+
+    // 6. Nothing matched: most likely an overlay that sweepBlockingPopups() cannot recognize.
+    //    Press BACK once (rate-limited, never during a battle) and let the caller's next tick
+    //    re-detect, instead of spinning on an unparsable screen (same idea as the 11.17 fix in
+    //    searchOpponentsAndDeployTroops).
+    if (dismissUnknownOverlayWithBack()) {
+        delay(800)
+        return GameScene.UNKNOWN
     }
 
     // Phase: if the screen just became unrecognized (was a known scene on the previous tick),
@@ -254,6 +267,57 @@ suspend fun detectCurrentScene(byteBuffer: ScreenCaptureManager.CaptureResult? =
         noteUnrecognizedPage()
     }
     return GameScene.UNKNOWN
+}
+
+/**
+ * True when the 训练部队页面 (练兵页 / 我的军队) is on screen — the left bar or the in-training
+ * 进攻 button. Shared by [detectCurrentScene] and [sweepBlockingPopups]: the page has its own
+ * top-right X that also matches `MyColors.RedX`, so it must never be treated as a dialog to close.
+ */
+private suspend fun isTrainingPageOnScreen(screen: ScreenCaptureManager.CaptureResult): Boolean =
+    findMultiColors(byteBuffer = screen, schema = MyColors.TrainingPage, increment = 1) != null ||
+        findMultiColors(byteBuffer = screen, schema = MyColors.AttackInTrainingPage, increment = 1) != null ||
+        findMultiColors(byteBuffer = screen, schema = MyColors.AttackInTrainingPage2, increment = 1) != null ||
+        findMultiColors(byteBuffer = screen, schema = MyColors.AttackInTrainingPage3, increment = 1) != null
+
+/**
+ * True when a battle is in progress (主世界放弃按钮 / 夜世界退出对战 / 取消搜索), used to keep the
+ * BACK fallback of [detectCurrentScene] from interfering with a fight.
+ */
+private suspend fun isInBattle(screen: ScreenCaptureManager.CaptureResult): Boolean =
+    findMultiColors(byteBuffer = screen, schema = MyColors.EndBattle, increment = 1) != null ||
+        findMultiColors(byteBuffer = screen, schema = MyColors.GiveUpButton, increment = 1) != null ||
+        findMultiColors(byteBuffer = screen, schema = MyColors.ExitBattleButton, increment = 1) != null ||
+        findMultiColors(byteBuffer = screen, schema = MyColors.CancelAttackSearch, increment = 1) != null
+
+/** Timestamp of the last "unknown overlay" BACK press, so the fallback cannot cascade. */
+private var lastUnknownOverlayBackAt = 0L
+private const val UNKNOWN_OVERLAY_BACK_INTERVAL_MS = 8_000L
+
+/**
+ * Last-resort recovery for an overlay that [sweepBlockingPopups] cannot recognize (no red-X and no
+ * common dialog) — e.g. the 选择英雄 dialog that deadlocked the training flow (see 11.17): press
+ * BACK to dismiss it.
+ *
+ * Guards:
+ *  - skipped while a battle is in progress ([isInBattle]), because BACK there interferes with the
+ *    fight;
+ *  - rate-limited to once per [UNKNOWN_OVERLAY_BACK_INTERVAL_MS], so a page the script simply does
+ *    not understand cannot be "BACK-ed" through in a cascade.
+ *
+ * @return true when BACK was actually sent (the caller should let the next tick re-detect).
+ */
+private suspend fun dismissUnknownOverlayWithBack(): Boolean {
+    val screen = ScreenCaptureManager.capture(asBitmap = false) as? ScreenCaptureManager.CaptureResult
+        ?: return false
+    if (isInBattle(screen)) return false
+    val now = System.currentTimeMillis()
+    if (now - lastUnknownOverlayBackAt < UNKNOWN_OVERLAY_BACK_INTERVAL_MS) return false
+    lastUnknownOverlayBackAt = now
+    ShowMessage("当前页面无法识别，按返回键尝试关闭未知弹窗")
+    // root shell keyevent; 失败时静默忽略（与 SearchOpponents.pressBack 一致）
+    runCatching { Shell.cmd("input keyevent 4").exec() }
+    return true
 }
 
 /**
@@ -379,6 +443,10 @@ suspend fun hasBlockingPopup(byteBuffer: ScreenCaptureManager.CaptureResult? = n
  * (函数58a) of the legacy script: it only taps the well-known close buttons, never the
  * confirm/action buttons, so it is safe to call from any wait-loop.
  *
+ * It never closes the 训练部队页面 itself: that page's top-right X also matches `MyColors.RedX`,
+ * but tapping it means "leave the training page", which callers such as `waitForScene(TRAINING_PAGE)`
+ * would then never reach. See [isTrainingPageOnScreen].
+ *
  * @return true if a popup was closed.
  */
 suspend fun sweepBlockingPopups(): Boolean {
@@ -392,10 +460,15 @@ suspend fun sweepBlockingPopups(): Boolean {
         return true
     }
     // Generic red-X close button (top-right round button).
-    findMultiColors(byteBuffer = screen, schema = MyColors.RedX, increment = 1)?.let {
-        TouchActions.tap(it.x, it.y, delayTime = 500)
-        ShowMessage("已关闭通用弹窗（红x）")
-        return true
+    // 注意：训练部队页面右上角也有一个"红叉"（点它是关闭训练页），它同样会被 RedX 特征命中
+    // （实机命中 (1217,65)）。在这里点它就会把训练页关掉 —— 例如 waitForScene(TRAINING_PAGE)
+    // 的每一轮都先清弹窗，训练页会被立刻关掉、永远等不到。所以在训练页上跳过这一分支。
+    if (!isTrainingPageOnScreen(screen)) {
+        findMultiColors(byteBuffer = screen, schema = MyColors.RedX, increment = 1)?.let {
+            TouchActions.tap(it.x, it.y, delayTime = 500)
+            ShowMessage("已关闭通用弹窗（红x）")
+            return true
+        }
     }
     // Common wood-panel dialog: tap its top-right close region (the dialog gold edge starts ~x=150).
     findMultiColors(byteBuffer = screen, schema = MyColors.CommonDialog, increment = 1)?.let {

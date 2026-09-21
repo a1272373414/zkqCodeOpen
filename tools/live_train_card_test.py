@@ -30,7 +30,7 @@ def card_crop(img, x, y):
 
 def main():
     img = cv2.imread(cap('lt0.png'))
-    if page_of(img) == 'main_village':
+    if page_of(img) in ('main_village', 'night_village'):
         h = find_first(img, _feat_train_troops)
         print('主村庄：训练部队按钮特征 =', h)
         if h:
