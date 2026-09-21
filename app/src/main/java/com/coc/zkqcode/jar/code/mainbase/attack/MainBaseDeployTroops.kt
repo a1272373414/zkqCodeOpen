@@ -1,159 +1,234 @@
 package com.coc.zkqcode.jar.code.mainbase.attack
 
-
-import android.text.method.Touch
+import android.graphics.Point
 import com.coc.zkqcode.core.system.screencapture.ScreenCaptureManager
 import com.coc.zkqcode.core.util.basic.delayWithMultiplier
-import com.coc.zkqcode.core.util.fileactions.LogHelper.logAndRestart
 import com.coc.zkqcode.core.util.touchactions.TouchActions
 import com.coc.zkqcode.jar.code.colorschema.ColorSchema
 import com.coc.zkqcode.jar.code.colorschema.MyColors
 import com.coc.zkqcode.jar.code.mainbase.others.zoomSmallMainBase
 import com.coc.zkqcode.jar.code.universal.colors.findMultiColors
-import com.coc.zkqcode.jar.code.universal.colors.findMultiColorsUntil
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.withContext
-import kotlin.random.Random
+import com.coc.zkqcode.jar.code.universal.deploy.DeployDebug
+import com.coc.zkqcode.jar.code.universal.deploy.DeployGeometry
+import com.coc.zkqcode.jar.code.universal.deploy.DeploySettings
+import com.coc.zkqcode.jar.code.universal.deploy.DeploySide
+import com.coc.zkqcode.jar.code.universal.deploy.DeployType
+import com.coc.zkqcode.jar.code.universal.deploy.deploySiegeOrReinforcement
+import com.coc.zkqcode.jar.code.universal.deploy.deployUntilGone
+import com.coc.zkqcode.jar.code.universal.deploy.readDeploySettings
+import com.coc.zkqcode.jar.code.universal.deploy.releaseSpells
+import com.coc.zkqcode.jar.code.universal.deploy.resetDeployState
+import com.coc.zkqcode.jar.code.universal.deploy.swipeDeploymentBar
 
-// Per-troop deployment drag timeout in milliseconds
-private const val DEPLOY_TIMEOUT_MS = 10_000L
+/** Outer deploy passes; each pass re-reads the bar, so 活动兵 joining mid-battle are picked up. */
+private const val DEPLOY_ROUNDS = 6
 
-// Drag start position (top of deploy zone)
-private const val DRAG_START_X = 600F
-private const val DRAG_START_Y = 50F
+/** Deployment-bar pages to walk after the current one is empty (源 `兵种显示` 有 左/中/右 三态). */
+private const val MAX_BAR_PAGES = 3
 
-// Drag end position (bottom of deploy zone)
-private const val DRAG_END_X = 85F
-private const val DRAG_END_Y = 430F
-
-// Duration (ms) for each individual smooth drag sweep
-private const val DRAG_SWEEP_MS = 600
-private const val DRAG_SWEEP_SLOW_MS = 3000
-
+/**
+ * Main-world troop deployment, following the legacy source project's model
+ * (`放兵` / `函数142a` / `函数327a`) with the source's own coordinates converted by
+ * [DeployGeometry] instead of a hand-calibrated ring.
+ *
+ * Behaviour:
+ *  - The four legacy 下兵方式 modes (四面 / 单面仿滑屏 / 单面真滑屏 / 单面中间单点) and 援兵位置 are
+ *    read from the schema config (`deploy_mode` / `deploy_side`), mirroring the source's
+ *    `活鱼下兵方式` / `援兵位置`.
+ *  - Units are placed on the quadrant deploy LINES: 函数327a walks each line from 开始 to 结束 in
+ *    `兵数` even steps and shifts every tap by the per-type offset.
+ *  - Each troop family is deployed until it disappears from the deployment bar. The legacy code
+ *    knows an exact count from its army config; this project does not, so [deployUntilGone] cycles
+ *    the quadrants until the bar no longer shows the unit.
+ *  - Spells follow the mode: 四面 dumps them all in one round (源 `放兵`), single-side releases them
+ *    on the source's timeline ([releaseSpells]).
+ *  - Heroes are still tapped in the bar and dropped at the quadrant middle.
+ */
 suspend fun mainBaseDeployTroops() {
     // Record the start time of the battle
     zoomSmallMainBase(isForAttack = true)
-    repeat(3) {
+    // Per-battle deploy state (图腾 wave / 法术 timeline) starts from scratch.
+    resetDeployState()
+    val settings = readDeploySettings()
+    DeployDebug.log("开始下兵：方式=${settings.mode.label} 援兵=${settings.reinforcementSide.label} 速度=${settings.safeSpeed}")
+    // Stand-in for the source's `放完兵时间`: the moment this battle's deployment starts.
+    val deployStartMs = System.currentTimeMillis()
+
+    repeat(DEPLOY_ROUNDS) {
         // Dismiss the event reward popup if present (destruction milestones can trigger it while deploying)
         if (handleRewardPopup()) delayWithMultiplier(800)
-        // Deploy each troop type if detected in the deployment bar
-        deployIfPresent(DRAG_SWEEP_MS, MyColors.DragonAtDeploymentBar, MyColors.DragonAtDeploymentBar2)
-        deployIfPresent(DRAG_SWEEP_MS, MyColors.GiantAtDeploymentBar, MyColors.GiantAtDeploymentBar2)
-        deployIfPresent(DRAG_SWEEP_SLOW_MS, MyColors.BarbarianAtDeploymentBar, MyColors.BarbarianAtDeploymentBar2)
-        deployIfPresent(DRAG_SWEEP_SLOW_MS, MyColors.ArcherAtDeploymentBar, MyColors.ArcherAtDeploymentBar2, MyColors.ArcherAtDeploymentBar3, MyColors.ArcherAtDeploymentBar4)
-        deployHeroes()
-        deployOthers()
+        deployCurrentBarPage(settings)
+        // 法术: 四面 一轮内全部放完；单面 按源 间隔 时间轴释放
+        releaseSpells(settings, System.currentTimeMillis() - deployStartMs) {
+            findInBar(MyColors.SpellColorAtDeploymentBar, MyColors.ReviveSpellAtDeploymentBar)
+        }
+        // 当前页的兵都放完后左滑翻页，把后面页面的兵也放掉（源 函数135a/136a）
+        deployRemainingBarPages(settings)
     }
 }
 
-private suspend fun deployOthers() {
-    //Deploy other troops and spells
-    repeat(10) {
-        val troops = findMultiColorsUntil(
-            schemas = listOf(MyColors.TroopColorAtDeploymentBar, MyColors.SuperTroopColorAtDeploymentBar, MyColors.SpecialTroopColorAtDeploymentBar), duration = 100
-        )
-        if (troops != null) {
-            TouchActions.tap(troops.x, troops.y, delayTime = 300)
-            repeat(3) {
-                TouchActions.tap(310, 247, delayTime = 100)
-                TouchActions.tap(386, 222, delayTime = 100)
-            }
-        }
-        val spells = findMultiColorsUntil(schemas = listOf(MyColors.SpellColorAtDeploymentBar), duration = 100)
-        if (spells != null) {
-            TouchActions.tap(spells.x, spells.y, delayTime = 300)
-            repeat(3) {
-                TouchActions.tap(328, 366, delayTime = 300)
-            }
-        }
+/** Runs deploy passes in order; true when at least one of them found something in the bar. */
+private suspend fun anyDeployed(vararg passes: suspend () -> Boolean): Boolean {
+    var found = false
+    for (pass in passes) {
+        if (pass()) found = true
     }
+    return found
 }
 
-private suspend fun deployHeroes() {
-    // All 6 hero color schemas to check in the deployment bar
-    val heroes = listOf(
-        MyColors.KingBarbarian,
-        MyColors.QueenArcher,
-        MyColors.QueenArcher2,
-        MyColors.QueenArcher3,
-        MyColors.MinionPrince,
-        MyColors.MinionPrince2,
-        MyColors.GrandWarden,
-        MyColors.GrandWarden2,
-        MyColors.GrandWarden3,
-        MyColors.GrandWarden4,
-        MyColors.RoyalChampion,
-        MyColors.RoyalChampion2,
-        MyColors.DragonDuke
+/** Everything this project can recognize on the CURRENT deployment-bar page. */
+private suspend fun deployCurrentBarPage(settings: DeploySettings): Boolean = anyDeployed(
+    { deploySpecificTroops(settings) },
+    { deployHeroes(settings) },
+    { deployGenericTroops(settings) },
+    { deploySiegeAndReinforcement(settings) }
+)
+
+/**
+ * 源 `函数135a` / `函数136a` 的部署栏翻页：当前页的兵放完后左滑翻到下一页继续放；翻到没有可放的
+ * 兵就右滑翻回第一页（下一轮从第一页重新开始）。
+ */
+private suspend fun deployRemainingBarPages(settings: DeploySettings) {
+    var pages = 0
+    while (pages < MAX_BAR_PAGES) {
+        pages++
+        swipeDeploymentBar(forward = true)
+        if (!deployCurrentBarPage(settings)) break
+    }
+    repeat(pages) { swipeDeploymentBar(forward = false) }
+    if (pages > 1) DeployDebug.log("部署栏翻页 $pages 页完成，已滑回第一页")
+}
+
+/**
+ * 源 `函数156a`: 攻城机器（源 `器列表` 9 种 → `找机器`）或部落城堡援兵（`找援兵`），
+ * 落在 `援兵位置` 所在象限的 `中间`。
+ */
+private suspend fun deploySiegeAndReinforcement(settings: DeploySettings): Boolean =
+    deploySiegeOrReinforcement(
+        settings = settings,
+        side = settings.reinforcementSide,
+        findInBar = {
+            findInBar(
+                MyColors.SiegeChariot, MyColors.SiegeChariot2,
+                MyColors.SiegeAirship, MyColors.SiegeAirship2,
+                MyColors.SiegeWarBall, MyColors.SiegeWarBall2,
+                MyColors.SiegeBarracks, MyColors.SiegeBarracks2,
+                MyColors.SiegeLogLauncher, MyColors.SiegeLogLauncher2,
+                MyColors.SiegeFlameThrower, MyColors.SiegeFlameThrower2,
+                MyColors.SiegeDrill, MyColors.SiegeDrill2,
+                MyColors.SiegeTroopLauncher, MyColors.SiegeTroopLauncher2,
+                MyColors.SiegeSkyChariot, MyColors.SiegeSkyChariot2,
+                MyColors.ClanCastleTroop, MyColors.ClanCastleTroop2, MyColors.ClanCastleTroop3,
+                MyColors.ClanCastleTroop4, MyColors.ClanCastleTroop5
+            )
+        }
     )
-    for (hero in heroes) {
-        // Take a fresh screenshot for each hero to get the latest state of the bar
-        val screenBuffer = ScreenCaptureManager.capture(asBitmap = false) as? ScreenCaptureManager.CaptureResult ?: continue
-        val found = findMultiColors(schema = hero, byteBuffer = screenBuffer)
-        if (found != null) {
-            // Tap the hero icon in the deployment bar to select it
-            TouchActions.tap(found.x, found.y)
-            delayWithMultiplier(300)
-            // Tap the deploy zone to place the hero on the battlefield
-            TouchActions.tap(DRAG_START_X.toInt(), DRAG_START_Y.toInt())
-            delayWithMultiplier(300)
+
+/**
+ * Deploys a troop family. If any of its color variants is in the bar, tap across the quadrants
+ * (函数327a) until the whole family is gone.
+ */
+private suspend fun deployFamily(
+    settings: DeploySettings,
+    type: DeployType,
+    vararg schemas: ColorSchema
+): Boolean {
+    val hit = findInBar(*schemas) ?: return false
+    DeployDebug.log("发现 ${type.label} 家族：${schemas.joinToString("/") { it.name ?: "未命名" }} @(${hit.x},${hit.y})")
+    deployUntilGone(type, settings, findInBar = { findInBar(*schemas) })
+    return true
+}
+
+private suspend fun deploySpecificTroops(settings: DeploySettings): Boolean = anyDeployed(
+    {
+        deployFamily(
+            settings, DeployType.TROOP,
+            MyColors.DragonAtDeploymentBar, MyColors.DragonAtDeploymentBar2, MyColors.DragonAtDeploymentBar3
+        )
+    },
+    { deployFamily(settings, DeployType.TROOP, MyColors.GiantAtDeploymentBar, MyColors.GiantAtDeploymentBar2) },
+    { deployFamily(settings, DeployType.TROOP, MyColors.BarbarianAtDeploymentBar, MyColors.BarbarianAtDeploymentBar2) },
+    {
+        deployFamily(
+            settings, DeployType.TROOP,
+            MyColors.ArcherAtDeploymentBar, MyColors.ArcherAtDeploymentBar2,
+            MyColors.ArcherAtDeploymentBar3, MyColors.ArcherAtDeploymentBar4
+        )
+    },
+    { deployFamily(settings, DeployType.TROOP, MyColors.PrinceAtDeploymentBar) },
+    { deployFamily(settings, DeployType.TROOP, MyColors.DragonRiderAtDeploymentBar) },
+    // 图腾 has its own deploy type: the source `函数327a` pulls it inward by `a` instead of 0, so
+    // it must NOT go through DeployType.TROOP (which lands right on the deploy ring).
+    { deployFamily(settings, DeployType.TOTEM, MyColors.TotemAtDeploymentBar) }
+)
+
+private suspend fun deployGenericTroops(settings: DeploySettings): Boolean {
+    // Remaining (unnamed) troops, including the 活动兵 that can join mid-battle.
+    return deployFamily(
+        settings, DeployType.TROOP,
+        MyColors.TroopColorAtDeploymentBar, MyColors.SuperTroopColorAtDeploymentBar, MyColors.SpecialTroopColorAtDeploymentBar
+    )
+}
+
+private suspend fun deployHeroes(settings: DeploySettings): Boolean {
+    var heroFound = false
+    // One entry per HERO (not per schema): the primary schema first, then optional fallback variants.
+    // Grouping avoids treating two schemas of the SAME hero as two separate heroes — previously the
+    // legacy fallback variants kept matching an already-deployed hero and wasted 4 retries each.
+    val heroGroups = listOf(
+        listOf(MyColors.KingBarbarian),
+        listOf(MyColors.QueenArcher, MyColors.QueenArcher2, MyColors.QueenArcher3, MyColors.QueenArcherLegacy),
+        listOf(MyColors.MinionPrince, MyColors.MinionPrince2, MyColors.MinionPrinceLegacy),
+        listOf(MyColors.GrandWarden, MyColors.GrandWarden2, MyColors.GrandWarden3, MyColors.GrandWarden4, MyColors.GrandWardenLegacy),
+        listOf(MyColors.RoyalChampion, MyColors.RoyalChampion2),
+        listOf(MyColors.DragonDuke)
+    )
+    // Hero drop candidates: the four quadrant middles (源 `taps(象限中间)`), tried in order so that
+    // when a hero cannot be placed at one spot the retry uses a DIFFERENT one (heroes fail to be
+    // placed more often than troops).
+    val drops = listOf(
+        DeploySide.TOP_LEFT, DeploySide.TOP_RIGHT, DeploySide.BOTTOM_LEFT, DeploySide.BOTTOM_RIGHT
+    ).map { DeployGeometry.middleTap(it, DeployType.TROOP) }
+    for (group in heroGroups) {
+        var deployed = false
+        for (hero in group) {
+            // Stop once this hero has been placed, so we do not re-try its fallback variants.
+            if (deployed) break
+            var hit: Point? = findMultiColors(schema = hero) ?: continue
+            var tries = 0
+            while (hit != null && tries < 2) {
+                tries++
+                DeployDebug.log("英雄 ${hero.name ?: "未命名"} @(${hit.x},${hit.y}) 第${tries}轮（选中后依次试 ${drops.size} 个落点）")
+                // Legacy 函数162a/163a: tap the hero's bar card (it gets a white selection border),
+                // then tap a deploy point. The game does NOT support drag-and-drop, and a single
+                // placement tap can land on a spot the hero cannot be placed at, so try every
+                // candidate point after ONE selection — the first valid one places the hero.
+                TouchActions.tap(hit.x, hit.y, delayTime = 400)
+                delayWithMultiplier(600)
+                for (drop in drops) {
+                    TouchActions.tap(drop.x, drop.y, delayTime = 400)
+                }
+                hit = findMultiColors(schema = hero)
+            }
+            DeployDebug.log("英雄 ${hero.name ?: "未命名"} 结束，仍在栏中=${hit != null}")
+            if (hit == null) {
+                deployed = true
+                heroFound = true
+            }
         }
     }
+    return heroFound
 }
 
 /**
- * Detects whether [schemas] are visible in the deployment bar and, if so,
- * deploys all units of that type via continuous back-and-forth dragging.
+ * Returns the bar position of the first schema visible in the deployment bar, or null. Captures
+ * the screen once so the whole family is checked against a single frame.
  */
-private suspend fun deployIfPresent(dragSweepMs: Int, vararg schemas: ColorSchema) {
-    val screenBuffer = ScreenCaptureManager.capture(asBitmap = false) as? ScreenCaptureManager.CaptureResult ?: logAndRestart("failed to take screenshot at close advertisement")
+private suspend fun findInBar(vararg schemas: ColorSchema): Point? {
+    val screen = ScreenCaptureManager.capture(asBitmap = false) as? ScreenCaptureManager.CaptureResult ?: return null
     for (schema in schemas) {
-        val troop = findMultiColors(schema = schema, byteBuffer = screenBuffer)
-        if (troop != null) {
-            dragUntilDeployed(troop.x, troop.y, dragSweepMs, schemas)
-            return
-        }
+        val point = findMultiColors(schema = schema, byteBuffer = screen)
+        if (point != null) return point
     }
-}
-
-/**
- * Selects the troop at ([x], [y]) in the deployment bar, then holds one finger down
- * and alternates between [DRAG_START_X],[DRAG_START_Y] and [DRAG_END_X],[DRAG_END_Y]
- * until [schemas] are no longer detected (all units deployed) or [DEPLOY_TIMEOUT_MS]
- * has elapsed for this troop.
- */
-private suspend fun dragUntilDeployed(x: Int, y: Int, dragSweepMs: Int, schemas: Array<out ColorSchema>) {
-    // Select the troop in the deployment bar
-    TouchActions.tap(x, y)
-    delayWithMultiplier(300)
-
-    val startTime = System.currentTimeMillis()
-    // Hold the finger down; it will stay down for the entire drag loop
-    TouchActions.touchDown(DRAG_START_X, DRAG_START_Y, 1)
-    try {
-        delayWithMultiplier(600)
-        while (true) {
-            var currentDragSweepMs = dragSweepMs + Random.nextInt(-500, 500)
-            // Drag forward: deploy position
-            TouchActions.moveSmoothly(DRAG_START_X, DRAG_START_Y, DRAG_END_X, DRAG_END_Y, currentDragSweepMs, 1)
-            delayWithMultiplier(300)
-
-            // Check whether the troop is still present in the deployment bar
-            val elapsed = System.currentTimeMillis() - startTime
-            val stillPresent = schemas.any { findMultiColors(schema = it) != null }
-            if (!stillPresent || elapsed >= DEPLOY_TIMEOUT_MS) break
-            currentDragSweepMs = dragSweepMs + Random.nextInt(-500, 500)
-            // Drag back: ready for another forward sweep
-            TouchActions.moveSmoothly(DRAG_END_X, DRAG_END_Y, DRAG_START_X, DRAG_START_Y, currentDragSweepMs, 1)
-
-            // Check timeout again after the return sweep before the next forward drag
-            if (System.currentTimeMillis() - startTime >= DEPLOY_TIMEOUT_MS) break
-
-        }
-    } finally {
-        // Always release the finger, even if canceled
-        withContext(NonCancellable) {
-            TouchActions.touchUp(1)
-        }
-    }
+    return null
 }

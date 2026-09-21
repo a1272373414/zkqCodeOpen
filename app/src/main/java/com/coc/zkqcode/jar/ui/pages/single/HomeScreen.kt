@@ -235,6 +235,7 @@ fun HomeScreen(
                                 SettingInputRow(key = GLOBAL_SETTINGS.DELAY_MULTIPLIER.key)
                                 SettingInputRow(key = GLOBAL_SETTINGS.ENTER_GAME_TIMER.key)
                                 SettingSwitchIcon(key = GLOBAL_SETTINGS.RECORD_PROGRESS.key)
+                                SettingSwitchIcon(key = GLOBAL_SETTINGS.DEPLOY_DEBUG.key)
 
 
                                 SettingDropdown(

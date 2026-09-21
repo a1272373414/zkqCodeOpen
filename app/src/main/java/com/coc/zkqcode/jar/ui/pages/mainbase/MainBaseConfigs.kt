@@ -92,6 +92,22 @@ fun LazyListScope.MainBaseConfig(
         }
     }
 
+    // Deploy behaviour: 下兵方式 / 援兵位置 (source `活鱼下兵方式` / `援兵位置`)
+    item {
+        SettingSection(visible = isExpanded) {
+            FlowRow {
+                SettingDropdown(
+                    key = "${MAIN_BASE_SETTINGS.DEPLOY_MODE.key}_c$index",
+                    options = listOf("四面", "单面仿滑屏", "单面真滑屏", "单面中间单点")
+                )
+                SettingDropdown(
+                    key = "${MAIN_BASE_SETTINGS.DEPLOY_SIDE.key}_c$index",
+                    options = listOf("左上", "右上", "左下", "右下")
+                )
+            }
+        }
+    }
+
     // AI deploy & Tactics
     /* item {
         AnimatedVisibility(visible = isExpanded) {

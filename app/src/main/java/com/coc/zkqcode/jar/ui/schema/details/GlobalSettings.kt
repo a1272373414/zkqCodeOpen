@@ -27,6 +27,10 @@ object GlobalSettings {
     val DEVICE_REMARK = SettingDef("device_remark", "设备备注", "", "GLOBAL_SETTINGS")
     val RUNTIME_SCREENSHOT = SettingDef("runtime_screenshot", "运行时截图", 0, "GLOBAL_SETTINGS")
 
+    // Deploy debug switch: when on, the deploy pipeline logs every decision (mode / quadrant /
+    // drop point / tap) so deploy problems can be located quickly.
+    val DEPLOY_DEBUG = SettingDef("deploy_debug", "下兵调试日志", 0, "GLOBAL_SETTINGS")
+
     val all = listOf(
         CONFIG_COUNT,
         ACCOUNT_COUNT,
@@ -47,7 +51,8 @@ object GlobalSettings {
         CREATE_GEM_BUILD,
         AFTER_KICK_OPTION,
         DEVICE_REMARK,
-        RUNTIME_SCREENSHOT
+        RUNTIME_SCREENSHOT,
+        DEPLOY_DEBUG
     )
 }
 

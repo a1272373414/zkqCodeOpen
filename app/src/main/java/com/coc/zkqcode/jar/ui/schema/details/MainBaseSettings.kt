@@ -17,6 +17,9 @@ object MainBaseSettings {
     )
     val MANUAL_TRAINING = SettingDef("manual_training", "手动配兵", 0, "MAIN_BASE_SETTINGS")
     val TACTICS_MODE = SettingDef("tactics_mode", "战术设置", "0", "MAIN_BASE_SETTINGS")
+    // 下兵方式 / 援兵位置：对应源脚本的 `活鱼下兵方式` / `援兵位置`（下拉存的是选项下标）
+    val DEPLOY_MODE = SettingDef("deploy_mode", "下兵方式", "0", "MAIN_BASE_SETTINGS")
+    val DEPLOY_SIDE = SettingDef("deploy_side", "援兵位置", "0", "MAIN_BASE_SETTINGS")
     val DONATION_SETTING = SettingDef("donation_setting", "自动捐兵", 1, "MAIN_BASE_SETTINGS")
     val REQUEST_REINFORCEMENT_SETTING =
         SettingDef("request_reinforcement_setting", "请求增援", 1, "MAIN_BASE_SETTINGS")
@@ -140,6 +143,8 @@ object MainBaseSettings {
         STOP_BATTLE_AFTER_FULL_RESOURCES,
         MANUAL_TRAINING,
         TACTICS_MODE,
+        DEPLOY_MODE,
+        DEPLOY_SIDE,
         DONATION_SETTING,
         REQUEST_REINFORCEMENT_SETTING,
         DONATION_DETECT_INTERVAL,

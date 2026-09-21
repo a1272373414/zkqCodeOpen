@@ -47,6 +47,17 @@ interface IMainBaseAttackColors {
     val SpellColorAtDeploymentBar: ColorSchema
     val SuperTroopColorAtDeploymentBar: ColorSchema
     val SpecialTroopColorAtDeploymentBar: ColorSchema
+
+    // 源 cocfz-apk-test 部署栏色特征（90°旋转迁移，live_bar_b1 实测命中）
+    val ReviveSpellAtDeploymentBar: ColorSchema
+    val PrinceAtDeploymentBar: ColorSchema
+    val TotemAtDeploymentBar: ColorSchema
+    val DragonRiderAtDeploymentBar: ColorSchema
+    val DragonAtDeploymentBar3: ColorSchema
+    val QueenArcherLegacy: ColorSchema
+    val GrandWardenLegacy: ColorSchema
+    val MinionPrinceLegacy: ColorSchema
+
     val WaitForBattle: ColorSchema
     val BattlePage: ColorSchema
 
@@ -62,6 +73,31 @@ interface IMainBaseAttackColors {
     val VictoryStar: ColorSchema
     val VictoryStar2: ColorSchema
     val VictoryStar3: ColorSchema
+    // 源 cocfz-apk-test `器列表`(找机器) / `找援兵`：攻城机器 9 种 + 部落城堡援兵
+    // （90°旋转迁移：区域 (9,1,132,1279)->(1,587,1279,710)，偏移 (dx,dy)->(dy,-dx)）
+    val SiegeChariot: ColorSchema
+    val SiegeChariot2: ColorSchema
+    val SiegeAirship: ColorSchema
+    val SiegeAirship2: ColorSchema
+    val SiegeWarBall: ColorSchema
+    val SiegeWarBall2: ColorSchema
+    val SiegeBarracks: ColorSchema
+    val SiegeBarracks2: ColorSchema
+    val SiegeLogLauncher: ColorSchema
+    val SiegeLogLauncher2: ColorSchema
+    val SiegeFlameThrower: ColorSchema
+    val SiegeFlameThrower2: ColorSchema
+    val SiegeDrill: ColorSchema
+    val SiegeDrill2: ColorSchema
+    val SiegeTroopLauncher: ColorSchema
+    val SiegeTroopLauncher2: ColorSchema
+    val SiegeSkyChariot: ColorSchema
+    val SiegeSkyChariot2: ColorSchema
+    val ClanCastleTroop: ColorSchema
+    val ClanCastleTroop2: ColorSchema
+    val ClanCastleTroop3: ColorSchema
+    val ClanCastleTroop4: ColorSchema
+    val ClanCastleTroop5: ColorSchema
 }
 
 object MainBaseAttackColors : IMainBaseAttackColors {
@@ -213,6 +249,32 @@ object MainBaseAttackColors : IMainBaseAttackColors {
         80, 590, 1200, 720, "F7E2D1", "3|0|F7E2D1,6|0|F7E2D1,9|0|F7E2D1,12|0|F7E2D1,0|7|DDC5B2,3|7|DDC5B3,6|7|DFC6B3,9|7|DEC7B3,12|7|DEC6B3", 0, 0.95, "活动兵颜色"
     )
 
+    // === 源 cocfz-apk-test 部署栏色特征（90°旋转迁移，live_bar_b1 实测命中）===
+    override val ReviveSpellAtDeploymentBar = ColorSchema.parse(
+        1, 587, 1279, 710, "809BB3", "0|-9|F2FFFF,-6|0|66839A,-11|-1|3AB1FF,-13|-20|8C99A4,-8|-20|B1C9DF,10|-21|B6C5D0,14|-16|567482,16|2|092847,16|8|082947", 0, 0.9, "复苏法术（legacy 函数141a）"
+    )
+    override val PrinceAtDeploymentBar = ColorSchema.parse(
+        1, 587, 1279, 710, "986E1F", "4|-8|FFFF82,30|-1|FFD53E,31|-7|FFFF5C,47|5|602E00,10|-12|110100,8|-20|FFFC5E,47|-1|683000", 0, 0.9, "王子（legacy 函数164a）"
+    )
+    override val TotemAtDeploymentBar = ColorSchema.parse(
+        1, 587, 1279, 710, "BCA584", "0|-9|C3AB8B,-10|0|C7AE91,-10|-8|C7B093,-21|-15|9B6056,-21|-27|AF5E62,12|7|CE846C,10|-4|A46759,13|-19|975D54,11|-28|B55D65,0|-25|1E76ED", 0, 0.9, "图腾（legacy 函数141a）"
+    )
+    override val DragonRiderAtDeploymentBar = ColorSchema.parse(
+        1, 587, 1279, 710, "CDE4EA", "2|5|414ADB,-4|-4|040505,-12|-18|07080A,-20|-20|717C84,-25|-27|1D1D1F,-12|-34|9CA5A9,25|29|1A58B8,27|11|011567,17|0|000E45", 0, 0.9, "龙骑（legacy 函数140a）"
+    )
+    override val DragonAtDeploymentBar3 = ColorSchema.parse(
+        1, 587, 1279, 710, "6036E7", "11|-9|70303C,-1|-15|D85C6D,2|-20|E86078,-33|-29|D05868,-22|-41|F07080,-11|-47|D9707A,5|-46|F4F7F8", 0, 0.9, "飞龙（legacy 函数140a，补充 variant）"
+    )
+    override val QueenArcherLegacy = ColorSchema.parse(
+        1, 587, 1279, 710, "903858", "1|-2|923958,3|-20|923558,6|-31|9F3A60,9|-15|822C4F,14|-26|98385D,26|-2|7A95E6,23|-6|7393E7,-7|-46|608CE4,27|-34|AD3C60", 0, 0.9, "女皇（legacy 函数163a，补充 variant）"
+    )
+    override val GrandWardenLegacy = ColorSchema.parse(
+        1, 587, 1279, 710, "4B0D3D", "13|-1|8E2677,19|2|8C2875,23|-3|88267C,46|8|A32898,44|2|9C2A94,47|-4|C034B5,43|-48|72B1FA,51|-45|80C0FD,52|-37|B831AF,68|-5|7C2579", 0, 0.9, "守卫（legacy 函数165a，补充 variant）"
+    )
+    override val MinionPrinceLegacy = ColorSchema.parse(
+        1, 587, 1279, 710, "1B1760", "-3|0|1C1758,-8|-4|02001A,-16|-5|5F5684,3|-11|2A2FD1,16|-9|5057FF,29|-3|D1D6FF,19|13|E5E8FF,22|16|CBA4B0,19|3|00004F", 0, 0.85, "公爵（legacy 函数，补充 variant）"
+    )
+
     // Indicator shown when attack must wait (e.g. war cooldown)
     override val WaitForBattle = ColorSchema.parse(
         70, 480, 525, 585, "9D9D9D", "-8|10|9D9D9D,5|6|9D9D9D,13|6|9D9D9D,20|22|9D9D9D,108|18|9D9D9D,36|25|9D9D9D,22|35|9D9D9D,9|37|9D9D9D,-8|39|9D9D9D", 0, 0.9, "进攻需等待"
@@ -269,5 +331,77 @@ object MainBaseAttackColors : IMainBaseAttackColors {
         335, 557, 584, 681, "20C074",
         "-1|-63|90FBE4,-29|-1|20BF72,-30|-64|92FBE4,-59|0|20C074,-60|-63|90FBE4,-85|-2|20C074,-78|-60|8CF9E2,40|-1|20BF72,42|-61|8DFAE2,70|-2|1FBD70,67|-64|92FBE5,77|-2|1FBE70,78|-63|90FBE4",
         0, 0.9, "胜利之星"
+    )
+
+    // 源 cocfz-apk-test `器列表`(找机器) / `找援兵`：攻城机器 9 种 + 部落城堡援兵
+    // （90°旋转迁移：区域 (9,1,132,1279)->(1,587,1279,710)，偏移 (dx,dy)->(dy,-dx)）
+    override val SiegeChariot = ColorSchema.parse(
+        1, 587, 1279, 710, "182755", "-1|-11|D8A870,20|0|1E2C98,19|-6|235098,28|-30|767B7E,51|-4|20478D,49|11|1B407D,58|3|25467C,36|10|172488,39|-6|234D94", 2, 0.9, "攻城器-战车（legacy 识别机器）"
+    )
+    override val SiegeChariot2 = ColorSchema.parse(
+        1, 587, 1279, 710, "1E4386", "20|-34|767A7E,30|-18|2944E1,31|-2|1E309E,30|9|182688,13|7|18288D,52|7|203C6B,41|-34|696C70,-10|-14|D8A973,51|-13|D8A873", 2, 0.9, "攻城器-战车（legacy 识别机器）"
+    )
+    override val SiegeAirship = ColorSchema.parse(
+        1, 587, 1279, 710, "404AC8", "-24|-7|878590,-17|-24|282730,8|-38|282C38,23|-41|9A9CB1,28|-33|E0B07A,24|-21|3A49D0,16|-3|4358E0,22|-1|3B51E0,42|-2|405C90", 2, 0.9, "攻城器-飞艇（legacy 识别机器）"
+    )
+    override val SiegeAirship2 = ColorSchema.parse(
+        1, 587, 1279, 710, "404BCD", "-2|-25|7C74E4,-21|-11|A999F0,-20|-25|282730,7|-41|282D40,23|-43|989AAD,24|-19|3848D0,15|-3|4357E6,34|-11|3848D6,42|-10|465F96", 2, 0.9, "攻城器-飞艇（legacy 识别机器）"
+    )
+    override val SiegeWarBall = ColorSchema.parse(
+        1, 587, 1279, 710, "343AA8", "-3|-7|3844BE,1|-15|3340C8,18|-33|5877FF,24|-33|6084FF,41|-17|60A0FF,43|-8|5490FF,35|0|3D5BFF,37|-29|5D68FF,50|-10|D4A46C", 2, 0.9, "攻城器-战球（legacy 识别机器）"
+    )
+    override val SiegeWarBall2 = ColorSchema.parse(
+        1, 587, 1279, 710, "3850F8", "1|-7|405BFF,11|-6|4059FF,14|5|4052FF,19|-16|5691FF,17|-22|5C9EFF,-7|-43|5F78FF,-25|-27|3947DD,-32|-15|4048C0,-27|-6|3638A8", 2, 0.9, "攻城器-战球（legacy 识别机器）"
+    )
+    override val SiegeBarracks = ColorSchema.parse(
+        1, 587, 1279, 710, "282690", "-5|0|D8A871,6|-7|282897,17|2|282492,34|9|2329C8,34|3|282ED0,43|14|585C5B,49|0|2229C8,55|13|2024A8,41|-23|DCB078", 2, 0.9, "攻城器-战营（legacy 识别机器）"
+    )
+    override val SiegeBarracks2 = ColorSchema.parse(
+        1, 587, 1279, 710, "272491", "0|-10|282590,18|2|2329CA,17|-5|282CCA,22|-4|282CCF,22|13|535858,40|2|2024B0,33|-10|282ED3,39|-5|262AC5,24|-32|E0B47E", 2, 0.9, "攻城器-战营（legacy 识别机器）"
+    )
+    override val SiegeLogLauncher = ColorSchema.parse(
+        1, 587, 1279, 710, "142480", "-12|7|1F3762,-11|-3|403D39,-15|-13|D9AD78,1|-15|285186,23|-15|305890,22|2|101B68,21|11|102077,33|-3|423F3F,24|-24|696361", 2, 0.9, "攻城器-滚木车（legacy 识别机器）"
+    )
+    override val SiegeLogLauncher2 = ColorSchema.parse(
+        1, 587, 1279, 710, "1E345E", "0|-8|3B3C38,-8|-6|D8A870,9|-35|605956,38|-33|706462,35|-23|2F5B97,7|-19|20406B,12|-6|152480,38|-9|101968,48|-11|413C39", 2, 0.9, "攻城器-滚木车（legacy 识别机器）"
+    )
+    override val SiegeFlameThrower = ColorSchema.parse(
+        1, 587, 1279, 710, "204A74", "0|7|001A4A,12|16|2A33B5,19|45|2D4E8C,24|45|2E5192,33|34|292F9B,45|43|3060B2,46|38|336AC6,45|30|3967CA,34|10|464042,12|-18|6F6051", 2, 0.9, "攻城器-烈焰战车（legacy 识别机器）"
+    )
+    override val SiegeFlameThrower2 = ColorSchema.parse(
+        1, 587, 1279, 710, "001949", "13|9|2B34B5,22|41|2B4B85,27|41|2C4B85,36|32|282F97,50|37|3163B7,50|33|326AC5,49|24|3967CA,34|7|2931AD,37|3|443F41,13|-28|796858", 2, 0.9, "攻城器-烈焰战车（legacy 识别机器）"
+    )
+    override val SiegeDrill = ColorSchema.parse(
+        1, 587, 1279, 710, "383838", "1|-14|6073FF,-8|-24|697CFF,-13|1|6E6C6F,-45|2|383735,-46|-7|7E7F80,-53|-10|D8A470,-48|-11|353CBC,-36|-27|3B40B8,-7|-23|6979FF,2|-14|6375FF,7|-17|D8A870", 2, 0.9, "攻城器-钻机（legacy 识别机器）"
+    )
+    override val SiegeDrill2 = ColorSchema.parse(
+        1, 587, 1279, 710, "555555", "11|0|4D514D,19|-2|D59765,5|-15|454545,15|-20|E1AD75,7|-28|7183FF,-3|-38|7682FF,4|-42|E6B981,-37|-15|3D3D3D,-44|-21|8D8D8D,-44|-26|4349CB,-48|-28|E5B47D", 2, 0.9, "攻城器-钻机（legacy 识别机器）"
+    )
+    override val SiegeTroopLauncher = ColorSchema.parse(
+        1, 587, 1279, 710, "4E55D0", "-8|-6|454CB5,-17|-5|454CB5,-2|-19|4D54D5,21|12|393125,24|14|383027,28|-7|6E74F6,24|-7|6C75F5,24|-12|6C75F4,27|-10|6E75F5,20|-25|A29182,-19|-17|827266", 2, 0.9, "攻城器-部队发射器（legacy 识别机器）"
+    )
+    override val SiegeTroopLauncher2 = ColorSchema.parse(
+        1, 587, 1279, 710, "4E58D5", "0|-4|4A52C8,-9|-7|454CB1,-14|-11|474FB7,-16|-13|484FB6,-1|-24|4D55D0,25|9|3D3729,23|-9|6C75F5,28|-10|6C75F5,30|-14|6A72F5,28|-17|6A74F6,33|-23|A99888,23|-30|A89588", 2, 0.9, "攻城器-部队发射器（legacy 识别机器）"
+    )
+    override val SiegeSkyChariot = ColorSchema.parse(
+        1, 587, 1279, 710, "5A63D5", "-4|8|5C65D7,0|22|1A248E,26|23|1B248A,-3|42|000342,-2|48|00012E,7|63|24375B,18|64|435276,37|57|6B5E50", 2, 0.9, "攻城器-空中战车（legacy 识别机器）"
+    )
+    override val SiegeSkyChariot2 = ColorSchema.parse(
+        1, 587, 1279, 710, "1D2797", "27|0|1A248A,-4|28|00012D,31|21|0B1579,38|38|6A5B4F,19|44|455377,12|45|334468,7|45|27395C,-5|-16|5D64D3,-4|-26|5C64D6", 2, 0.9, "攻城器-空中战车（legacy 识别机器）"
+    )
+    override val ClanCastleTroop = ColorSchema.parse(
+        1, 587, 1279, 710, "C0844B", "-1|-13|C18450,10|0|C38650,7|-3|C48650,2|-7|C48450,1|-66|D09C60,0|-80|D09A58,7|-79|D4A060,4|-72|D1A061,66|-76|D6A165,70|-63|D4A068,76|-75|D09858,15|-96|C88C48,9|-92|B88440,7|-103|DE9850", 0, 0.96, "部落城堡援兵（legacy 找援兵）"
+    )
+    override val ClanCastleTroop2 = ColorSchema.parse(
+        1, 587, 1279, 710, "C68450", "-2|-15|C58752,-1|-29|C88C58,14|-9|CF9862,17|-7|D09863,6|-14|C8905E,7|-63|D8A569,17|-67|E0B078,-3|-67|D0985D,-1|-74|D09958,48|-67|E0B780,72|-69|D09A5C,65|-56|D8A76E,65|-43|D8A770", 0, 0.96, "部落城堡援兵（legacy 找援兵）"
+    )
+    override val ClanCastleTroop3 = ColorSchema.parse(
+        1, 587, 1279, 710, "D4A270", "-15|-18|D09968,-14|-42|D8A873,47|-42|D8A873,45|-18|CE9B6D,-21|12|C58450,-24|-67|D09B58,57|-21|C88A58,58|-68|D09858,12|-88|D09050", 0, 0.96, "部落城堡援兵（legacy 找援兵）"
+    )
+    override val ClanCastleTroop4 = ColorSchema.parse(
+        1, 587, 1279, 710, "C0844E", "0|-61|D09860,78|-77|D09858,77|-1|C08449,66|-19|CC9460,69|-43|D2A470,17|-14|D09866,7|-40|D4A06C,7|-58|D8A36C,35|-69|E8C08C,50|-88|B88448,52|-93|C88C48,52|-103|E09A55", 0, 0.96, "部落城堡援兵（legacy 找援兵）"
+    )
+    override val ClanCastleTroop5 = ColorSchema.parse(
+        1, 587, 1279, 710, "CCB530", "8|6|D5BE36,15|16|E2CC41,21|22|EAD547,72|1|CCB530,68|9|D7C038,64|20|E3CE43,61|24|E8D446,0|41|EBD74E,8|41|F2DD51,66|42|F2DD52,77|42|E9D44D,17|69|EDD73E,11|81|E1CA37,7|91|D6BF32,2|94|D1B92F,-1|99|CBB32C", 0, 0.96, "部落城堡援兵（legacy 找援兵）"
     )
 }
