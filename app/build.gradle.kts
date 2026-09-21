@@ -104,6 +104,23 @@ fun resolvePythonExe(): String {
     throw GradleException("No Python interpreter found. Add 'python.exe=<full path>' to local.properties.")
 }
 
+// Resolve the adb executable: the SDK's platform-tools first (adb is usually NOT on PATH on
+// Windows), then fall back to a plain "adb" so a properly configured PATH still works.
+fun resolveAdb(): String {
+    val sdkDir = resolveSdkDir()
+    for (relative in listOf("platform-tools/adb.exe", "platform-tools/adb")) {
+        val candidate = file("$sdkDir/$relative")
+        if (candidate.exists()) return candidate.absolutePath
+    }
+    return "adb"
+}
+
+// Target device for the adb based tasks. Defaults to the emulator this project is developed on;
+// override with 'adb.serial=<serial>' in local.properties (needed because several devices are
+// usually attached, so a bare "adb" would be ambiguous).
+fun resolveDeviceSerial(): String =
+    readLocalProperties().getProperty("adb.serial")?.takeIf { it.isNotBlank() } ?: "emulator-5556"
+
 // Clean old jar class files before recompilation
 tasks.register("cleanJarClasses") {
     group = "custom"
@@ -337,28 +354,33 @@ tasks.register("deployAndReload") {
     dependsOn("buildJar")
 
     doLast {
+        val adb = resolveAdb()
+        val serial = resolveDeviceSerial()
+
         // Dynamically find the built jar in assets directory
         val assetsPath = file("${project.projectDir.absolutePath}/src/main/assets")
         val jarFile = assetsPath.listFiles()?.firstOrNull { it.extension == "jar" }
             ?: throw GradleException("No jar found in assets directory")
         val devicePath = "/data/data/com.coc.zkqcode/files/assets/${jarFile.name}"
 
+        println("--- deployAndReload: adb=$adb device=$serial jar=${jarFile.name} ---")
+
         // 1. Remove stale jar files from /sdcard before pushing
-        ProcessBuilder("adb", "shell", "rm", "-f", "/sdcard/*.jar")
+        ProcessBuilder(adb, "-s", serial, "shell", "rm", "-f", "/sdcard/*.jar")
             .inheritIO().start().waitFor()
 
         // 2. Push JAR to sdcard first (adb push can't write to /data/data directly)
-        ProcessBuilder("adb", "push", jarFile.absolutePath, "/sdcard/${jarFile.name}")
+        ProcessBuilder(adb, "-s", serial, "push", jarFile.absolutePath, "/sdcard/${jarFile.name}")
             .inheritIO().start().waitFor()
 
         // 3. Copy to private app dir with root
-        ProcessBuilder("adb", "shell", "su", "-c",
+        ProcessBuilder(adb, "-s", serial, "shell", "su", "-c",
             "'cp /sdcard/${jarFile.name} $devicePath && chmod 644 $devicePath'")
             .inheritIO().start().waitFor()
-        println("--- Pushed ${jarFile.name} to device ---")
+        println("--- Pushed ${jarFile.name} to $serial ---")
 
         // 4. Send reload broadcast
-        ProcessBuilder("adb", "shell", "am", "broadcast",
+        ProcessBuilder(adb, "-s", serial, "shell", "am", "broadcast",
             "-a", "com.coc.zkqcode.DEBUG_RELOAD",
             "-n", "com.coc.zkqcode/.core.system.daemon.DebugReloadReceiver")
             .inheritIO().start().waitFor()
