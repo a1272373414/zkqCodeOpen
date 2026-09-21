@@ -39,14 +39,18 @@ suspend fun enterMainScreen(isDoubleCheck: Boolean = false): Boolean {
         if (!isGameAtFront()) {
             runGame()
         } else {
+            // Phase 3 (reused from legacy 函数47a/58a): dismiss any blocking popup FIRST — a popup
+            // hides the builder-icon row, which would make the page / village identification below
+            // fall back to the ambiguous 训练部队 button and report the night village as 主村庄.
+            sweepBlockingPopups()
             // Phase 1 (reused from legacy freescript): observe the current screen so the
             // user always knows which page / flow node we are on instead of guessing.
             SceneState.setScene(detectCurrentScene())
-            // Phase 3 (reused from legacy 函数47a/58a): dismiss any blocking popup first.
-            sweepBlockingPopups()
             if (isInHomePage()) {
                 if (!isDoubleCheck) {
-                    ShowMessage("已进入主界面")
+                    // Report which village we actually landed on instead of always claiming
+                    // "主界面": the night village is a valid home screen here too (see isInHomePage).
+                    ShowMessage("已进入主界面（${SceneState.currentScene.displayName}）")
                     return true
                 }
                 if (InGamesVars.currentGameVersion == GameVersion.CN) delay(1500)
@@ -191,10 +195,11 @@ private suspend fun isInHomePage(): Boolean {
     val hasTrainButton = findMultiColors(byteBuffer = screenBuffer, schema = MyColors.TrainTroops, increment = 1) != null
     if (!hasTrainButton) return false
 
-    // 3. Check for any of the worker icons (Main base, Goblin workers, or Builder base)
-    val workerSchemas = listOf(
-        MyColors.MainBaseWorker, MyColors.MainBaseWorker2, MyColors.MainBaseWorker3, MyColors.GoblinWorker, MyColors.GoblinResearcher, MyColors.BuilderBaseWorker, MyColors.BuilderBaseWorker2
-    )
-
-    return workerSchemas.any { findMultiColors(byteBuffer = screenBuffer, schema = it, increment = 1) != null }
+    // 3. A village HUD is only confirmed when a village-specific builder icon is visible.
+    //    NOTE: this intentionally accepts BOTH villages — the builder-base flow re-enters the game
+    //    through enterMainScreen() (claimAchievement / clickOttosOutPost) while standing in the
+    //    night village and must not be pushed back to the main village. The 训练部队 button alone
+    //    is not enough because it also exists in the night village / clan capital.
+    //    Which village it actually is can be read from [detectVillage] / [SceneState.currentScene].
+    return detectVillage(screenBuffer) != Village.UNKNOWN
 }

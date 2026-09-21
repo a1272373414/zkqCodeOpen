@@ -127,20 +127,102 @@ object SceneState {
 }
 
 /**
+ * Which village the camera is currently on, decided ONLY by village-specific markers so that the
+ * answer stays correct on every "village-like" screen (主世界 / 夜世界 / 都城).
+ *
+ * Mirrors the legacy freescript 是否主村庄界面() / 是否夜村庄界面() predicates (awcocx_main.lua
+ * L1548-1561), which likewise ask "which village is this" before doing anything else.
+ *
+ * Why the 训练部队 button cannot be used here (verified against real 1280x720 screenshots):
+ *   `MyColors.TrainTroops` matches in the MAIN village, the NIGHT village AND the clan capital
+ *   alike (it is only the common element of a village HUD), so it can never answer "which village".
+ *   That is exactly why the night village used to be reported as 主村庄.
+ * The discriminative markers are the builder-icon rows at the top of the screen:
+ *   主世界 -> MainBaseWorker / MainBaseWorker2 / MainBaseWorker3 / GoblinWorker / GoblinResearcher
+ *   夜世界 -> BuilderBaseWorker / BuilderBaseWorker2
+ * They were verified to be mutually exclusive (the main-village icons miss on night-village and
+ * capital screenshots, and the builder-base icons miss on main-village screenshots).
+ */
+enum class Village(val displayName: String) {
+    /** Main village / home village (主世界). */
+    MAIN("主世界"),
+
+    /** Builder base / night village (夜世界). */
+    NIGHT("夜世界"),
+
+    /** Neither village marker is visible (menu / battle / capital / popup / ...). */
+    UNKNOWN("未知村庄")
+}
+
+/**
+ * Detects which village the camera is on using village-specific builder markers only, so it is
+ * safe to call on any screen (training page, battle, capital, ...) — it simply returns
+ * [Village.UNKNOWN] there.
+ *
+ * @param byteBuffer optional pre-captured screen; a fresh capture is taken when null.
+ */
+suspend fun detectVillage(byteBuffer: ScreenCaptureManager.CaptureResult? = null): Village {
+    val screen = byteBuffer
+        ?: ScreenCaptureManager.capture(asBitmap = false) as? ScreenCaptureManager.CaptureResult
+        ?: return Village.UNKNOWN
+
+    // 1. Night village (夜世界): the master-builder icon row only exists in the builder base.
+    if (findMultiColors(byteBuffer = screen, schema = MyColors.BuilderBaseWorker, increment = 1) != null ||
+        findMultiColors(byteBuffer = screen, schema = MyColors.BuilderBaseWorker2, increment = 1) != null
+    ) {
+        return Village.NIGHT
+    }
+
+    // 2. Main village (主世界): the home-village builder icons (incl. the event goblin
+    //    builder / researcher) only appear on the home village.
+    if (findMultiColors(byteBuffer = screen, schema = MyColors.MainBaseWorker, increment = 1) != null ||
+        findMultiColors(byteBuffer = screen, schema = MyColors.MainBaseWorker2, increment = 1) != null ||
+        findMultiColors(byteBuffer = screen, schema = MyColors.MainBaseWorker3, increment = 1) != null ||
+        findMultiColors(byteBuffer = screen, schema = MyColors.GoblinWorker, increment = 1) != null ||
+        findMultiColors(byteBuffer = screen, schema = MyColors.GoblinResearcher, increment = 1) != null
+    ) {
+        return Village.MAIN
+    }
+
+    return Village.UNKNOWN
+}
+
+/**
  * Detects the primary screen from the current framebuffer using a prioritized list of
  * feature schemas. Mirrors the legacy `函数275a` dispatch + 是否主村庄界面/是否夜村庄界面 predicates.
+ *
+ * The village question is asked FIRST, through the village-specific builder markers (see
+ * [detectVillage]), because the 训练部队 button that used to be the main-village marker also
+ * exists in the night village and in the clan capital — using it first made the night village be
+ * reported as 主村庄 (and `waitForScene(MAIN_VILLAGE)` succeed while standing in the night village).
+ * When a dismissible popup hides the builder-icon row (village undecidable), the popup is swept
+ * away first ([sweepBlockingPopups]) and the village is then re-detected on a fresh capture.
  *
  * @param byteBuffer optional pre-captured screen; a fresh capture is taken when null.
  * @return the detected [GameScene].
  */
 suspend fun detectCurrentScene(byteBuffer: ScreenCaptureManager.CaptureResult? = null): GameScene {
-    val screen = byteBuffer
+    var screen = byteBuffer
         ?: ScreenCaptureManager.capture(asBitmap = false) as? ScreenCaptureManager.CaptureResult
         ?: return GameScene.UNKNOWN
 
-    // 1. Main village: the bottom-left 训练部队 button only exists on the home screen.
-    if (findMultiColors(byteBuffer = screen, schema = MyColors.TrainTroops, increment = 1) != null) {
-        return GameScene.MAIN_VILLAGE
+    // 1. Village screen: decide 主世界 / 夜世界 by village-specific markers only.
+    var village = detectVillage(screen)
+    // A popup / overlay hides the builder-icon row, which leaves the village undecidable and would
+    // let the ambiguous 训练部队 button label a night village as 主村庄. The legacy script closes
+    // dialogs (函数58a/47a) BEFORE asking 是否主村庄界面 / 是否夜村庄界面, so do the same here:
+    // close every dismissible popup first (a no-op when there is none) and then ask the village
+    // question again on a fresh capture.
+    if (village == Village.UNKNOWN && sweepBlockingPopups()) {
+        (ScreenCaptureManager.capture(asBitmap = false) as? ScreenCaptureManager.CaptureResult)?.let {
+            screen = it
+            village = detectVillage(it)
+        }
+    }
+    when (village) {
+        Village.NIGHT -> return GameScene.BUILDER_BASE
+        Village.MAIN -> return GameScene.MAIN_VILLAGE
+        Village.UNKNOWN -> Unit
     }
 
     // 2. Training page: left bar (训练部队页面) or the in-training 进攻 button.
@@ -157,11 +239,12 @@ suspend fun detectCurrentScene(byteBuffer: ScreenCaptureManager.CaptureResult? =
         return GameScene.BATTLE
     }
 
-    // 4. Builder base / night village.
-    if (findMultiColors(byteBuffer = screen, schema = MyColors.BuilderBaseWorker, increment = 1) != null ||
-        findMultiColors(byteBuffer = screen, schema = MyColors.BuilderBaseWorker2, increment = 1) != null
-    ) {
-        return GameScene.BUILDER_BASE
+    // 4. Last-resort village HUD fallback: the bottom-left 训练部队 button only tells us "this is
+    //    some village HUD" (it also exists in the night village / clan capital), so it is checked
+    //    only after the village-specific markers above were ruled out — e.g. when the builder row
+    //    is hidden by a panel. 都城 intentionally falls through to here.
+    if (findMultiColors(byteBuffer = screen, schema = MyColors.TrainTroops, increment = 1) != null) {
+        return GameScene.MAIN_VILLAGE
     }
 
     // Phase: if the screen just became unrecognized (was a known scene on the previous tick),
