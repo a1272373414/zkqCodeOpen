@@ -96,6 +96,9 @@ suspend fun searchOpponentsAndDeployTroops(): Boolean {
     }
     var searchTimes = 0
     var battleStarted = false
+    // Counts consecutive rounds where no anchor matched. A successful search can show a ~3-5s
+    // transition animation whose frame matches nothing, so we wait instead of pressing BACK.
+    var unknownRounds = 0
     val battleStartTime = System.currentTimeMillis()
     while (System.currentTimeMillis() - battleStartTime < SEARCH_TIMEOUT_MS) {
         // 每轮先清掉挡住界面的弹窗。这一步是关键：弹窗会给整个界面加一层黑色遮罩，
@@ -137,11 +140,20 @@ suspend fun searchOpponentsAndDeployTroops(): Boolean {
             break
         }
         // 兜底：三个锚点（主村庄 TrainTroops / 联机模式页 SearchOpponents / 练兵页 AttackButton）
-        // 一个都没命中，说明被"既没有红 x、也不是通用对话框"的弹窗挡住了（sweepBlockingPopups 认不出它，
-        // 例如"选择英雄"）。用返回键关掉它，否则这一屏会一直空转直到搜索超时。
+        // 一个都没命中。这里不能立刻按返回键，否则会把"搜索成功后的过渡动画"（约3-5秒，期间
+        // 这一帧没有任何锚点命中）打断，导致搜索结果永远出不来。改为先等待，连续多轮未知才按返回键。
         if (!acted && battlePage == null) {
-            pressBack()
-            ShowMessage("账号${InGamesVars.currentAccountNumber}，检测到未知弹窗，已按返回键关闭")
+            unknownRounds++
+            if (unknownRounds >= 3) {
+                pressBack()
+                ShowMessage("账号${InGamesVars.currentAccountNumber}，检测到未知弹窗，已按返回键关闭")
+                unknownRounds = 0
+            } else {
+                ShowMessage("账号${InGamesVars.currentAccountNumber}，疑似搜索过渡/未知界面，等待中（$unknownRounds/3）")
+            }
+            delayWithMultiplier(2000)
+        } else {
+            unknownRounds = 0
         }
         if (!checkReconnections()) return false
 

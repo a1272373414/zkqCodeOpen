@@ -13,7 +13,10 @@ suspend fun zoomSmallMainBase(isForBuild: Boolean = false, isForAttack: Boolean 
     pinchIn(141, 423, 1052, 352, 638, 365)
     delayWithMultiplier(200)
     if (isForAttack) {
-        repeat(2) {
+        // Pan the map all the way to a fixed extreme edge so the deploy boundary line lands at a
+        // deterministic screen position (fixed deploy coordinates rely on this). Extra swipes are
+        // harmless once the map has reached its limit.
+        repeat(4) {
             swipe(911, 134, 0, 720)
         }
     } else {
