@@ -29,6 +29,9 @@ for _s in (sys.stdout, sys.stderr):
 import cv2
 import numpy as np
 
+# 基于 adb sendevent 的真正多点触控工具（双指缩放，绕过 input 的单指限制）
+from adb_multitouch import pinch_in_raw
+
 ADB = r"C:\Users\TANG\AppData\Local\Android\Sdk\platform-tools\adb.exe"
 SERIAL = "emulator-5556"
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -65,6 +68,16 @@ def keyevent(code, dt=1.0):
 def swipe(x1, y1, x2, y2, dur=400, dt=1.0):
     adb(["shell", "input", "swipe", str(x1), str(y1), str(x2), str(y2), str(dur)])
     time.sleep(dt)
+
+
+def pinch_in(x1, y1, x2, y2, fx1, fy1, fx2, fy2, steps=20, step_ms=14, dt=0.9):
+    """双指缩放（真实多点触控，adb sendevent 注入），与 App 的 TouchActions.pinchIn 对齐。
+
+    两指分别从 (x1,y1)/(x2,y2) 移动到 (fx1,fy1)/(fx2,fy2)；两指收拢 = 缩小画面，
+    两指张开 = 放大画面。坐标沿用 1280×720 逻辑坐标系（同 tap/swipe）。
+    这是真正的双指手势，adb 的 `input` 命令做不到（单指限制）。
+    """
+    pinch_in_raw(x1, y1, x2, y2, fx1, fy1, fx2, fy2, steps, step_ms, dt)
 
 
 def cap(name):
@@ -241,8 +254,10 @@ def detect_page(rounds=2, name="detect.png", back_fallback=False, back_interval=
 def ensure_night_village(max_rounds=5):
     """从主世界切到夜世界（同 Kotlin enterBuilderBase：先把视角拉远，再点"去夜世界"的木船）。
 
-    注意：缩放需要多点手势（adb 的 `input swipe` 做不了），这里只做 Kotlin
-    zoomSmallMainBase 里的两次平移；实测在当前视角下平移后点 (317,474) 即可上船。
+    复现 Kotlin zoomSmallMainBase 的顺序：clickRightBottom → 平移 → 真正的双指缩小
+    （pinch_in，adb sendevent 多点注入）→ 再平移。最后点木船兜底。
+    adb 的 `input` 命令只支持单指，此前这里只能做平移近似；现在用 adb_multitouch
+    注入的真实双指缩放，与 App 内 TouchActions.pinchIn 对齐。
     """
     for _ in range(max_rounds):
         img = cv2.imread(cap('env0.png'))
@@ -250,6 +265,8 @@ def ensure_night_village(max_rounds=5):
             return True
         tap(1279, 100, dt=0.6)                      # clickRightBottom(1)
         swipe(200, 500, 950, -500, dur=500, dt=1.0)  # zoomSmallMainBase 的平移
+        # 真正的双指缩小（替代旧"input 做不了缩放"的限制）：两指从两侧收拢到 (638,365)
+        pinch_in(141, 423, 1052, 352, 638, 365, 638, 365)
         swipe(218, 523, 939, 162, dur=500, dt=1.0)
         for x, y in ((317, 474), (336, 512), (313, 568), (300, 450), (330, 540)):
             tap(x, y, dt=1.6)
@@ -261,17 +278,18 @@ def ensure_night_village(max_rounds=5):
 def ensure_main_village(max_rounds=6):
     """从夜世界（或其它页面）回到主世界（同 Kotlin enterMainBase 的点击序列）。
 
-    注意：Kotlin enterMainBase 在点击前会先 zoomSmallBuilderBase()，其中包含一次双指缩小
-    （TouchActions.pinchIn，需要多点触控）。模拟器的 adb input 只支持单指 tap/swipe，无法做
-    双指缩放，因此在未缩小的视角下「回主世界」的船可能不在下方网格覆盖的范围内 —— 这是工具侧
-    的输入限制，不影响 App 内 enterMainBase()（App 走 root uinput 多点注入）。若切不回去，
-    请直接在模拟器里手动切回主世界再运行脚本。
+    Kotlin enterMainBase 在点击前会先 zoomSmallBuilderBase()，其中包含一次双指缩小
+    （TouchActions.pinchIn）。此前工具的 adb input 只支持单指，做不了双指缩放，只能靠
+    大范围点船网格兜底。现在用 adb_multitouch 注入的真实双指缩小（与 App 内一致），
+    先把视角拉远，再点「回主世界」的船，成功率更高。
     """
     for _ in range(max_rounds):
         img = cv2.imread(cap('emv0.png'))
         if village_of(img) == "main":
             return True
         tap(1279, 100, dt=0.6)                      # clickRightBottom(1)
+        # enterMainBase 先 zoomSmallBuilderBase 缩小视角（双指收拢，同 App 的 pinchIn）
+        pinch_in(141, 423, 1052, 352, 638, 365, 638, 365)
         if village_of(cv2.imread(cap('emv1.png'))) == "main":
             return True
         # 夜世界地图右上角的「回营 / 船」热点（同 Kotlin enterMainBase）

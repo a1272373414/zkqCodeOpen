@@ -9,8 +9,9 @@ import sys
 import time
 import cv2
 
-from game_state import (cap, tap, swipe, find_first, page_of, keyevent, F_FEATURE,
-                        ensure_online, close_dialogs, parse_file, ensure_main_village)
+from game_state import (cap, tap, swipe, pinch_in, find_first, page_of, keyevent,
+                        F_FEATURE, ensure_online, close_dialogs, parse_file,
+                        ensure_main_village)
 from attack_feats import bar_feats
 
 PKG = os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -137,12 +138,15 @@ def main():
 
 def save(label):
     if NORMALIZE_PAN:
-        # Mirror ZoomSmallMainBase.kt (isForAttack): drag the map to its fixed extreme edge. Extra
-        # swipes are harmless once the map has hit its limit, so repeat 4x like the Kotlin does.
-        # NOTE: the Kotlin also does a two-finger `pinchIn` to pin the zoom level, which adb's
-        # single-touch `input swipe` cannot reproduce (see game_state.py). If the battle zoom is not
-        # already at the App's normalised value, this frame validates the pan only.
-        print('归一化：拖动地图到固定边缘 x4（同 ZoomSmallMainBase）...')
+        # 完整复现 Kotlin ZoomSmallMainBase.kt (isForAttack=true) 的归一化手势：先两次
+        # clickRightBottom + 一次平移，再用双指 pinchIn 把缩放固定到归一化级别（此前 adb 的
+        # `input` 只能单指，做不了 pinchIn，导致战斗缩放未归一化；现在走 adb_multitouch 的
+        # 双指注入即可对齐），最后把地图拖到固定边缘（同 Kotlin 的 repeat(4)）。
+        print('归一化：复现 ZoomSmallMainBase（含双指缩放）...')
+        tap(1279, 100, dt=0.6)                       # clickRightBottom(1)
+        swipe(200, 500, 950, -500, dur=500, dt=1.0)
+        tap(1279, 100, dt=0.6)                       # clickRightBottom(1)
+        pinch_in(141, 423, 1052, 352, 638, 365, 638, 365)  # 双指收拢固定缩放级别
         for _ in range(4):
             swipe(911, 134, 0, 720)
         time.sleep(1.0)
