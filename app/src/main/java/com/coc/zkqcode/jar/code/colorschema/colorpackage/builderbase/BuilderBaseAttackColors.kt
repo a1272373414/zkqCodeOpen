@@ -17,6 +17,7 @@ interface IBuilderBaseAttackColors {
     val BuilderBaseBarbarian: ColorSchema
     val TroopsWithSkills: ColorSchema
     val TroopsWithOutSkills: ColorSchema
+    val BuilderBaseMachine: ColorSchema
 }
 
 object BuilderBaseAttackColors : IBuilderBaseAttackColors {
@@ -49,6 +50,14 @@ object BuilderBaseAttackColors : IBuilderBaseAttackColors {
     )
     override val BuilderBaseBarbarian = ColorSchema.parse(
         193, 585, 1261, 623, "FF763A", "7|0|FF763A,15|0|FF773B,23|0|FF783C,30|0|FF793C,0|6|FF773A,7|6|FF793C,15|6|FF7B3E,23|6|FF7D40,30|6|FF7E41", 0, 0.9, "夜世界野蛮人"
+    )
+
+    // 夜世界王(战争机器)：精确识别部署栏里的机器卡，替代原先写死的 tap(125,610)。
+    // 源脚本 `findMultiColor(48,15,142,500,"3067A2",...)`，经 90° 映射后区域为 (15,577,500,671)。
+    override val BuilderBaseMachine = ColorSchema.parse(
+        15, 577, 500, 671, "3067A2",
+        "13|6|00040A,18|-1|98B9FF,27|13|305F99,32|4|010005,43|5|3064A8,18|5|8E5566",
+        0, 0.85, "夜世界王(战争机器)"
     )
 
     // Troops with/without skills indicators
