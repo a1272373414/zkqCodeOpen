@@ -232,29 +232,69 @@ object PixelFontOcr {
     }
 
     private fun matchGlyph(component: Component, minSimilarity: Double, sizeTolerance: Int): String? {
+        // Phase 1: same-size comparison (original behaviour, unchanged).
         var bestChar: Char? = null
         var bestScore = 0.0
         for (glyph in glyphs) {
             if (abs(glyph.width - component.width) > sizeTolerance) continue
             if (abs(glyph.height - component.height) > sizeTolerance) continue
-            val rows = maxOf(glyph.height, component.height)
-            val cols = maxOf(glyph.width, component.width)
-            var matched = 0
-            var total = 0
-            for (y in 0 until rows) {
-                for (x in 0 until cols) {
-                    val glyphBit = y < glyph.height && x < glyph.width && glyph.bits[y * glyph.width + x]
-                    val inkBit = y < component.height && x < component.width && component.mask[y * component.width + x]
-                    if (glyphBit == inkBit) matched++
-                    total++
-                }
-            }
-            val score = matched.toDouble() / total.toDouble()
+            val score = paddedAgreement(glyph, component)
             if (score > bestScore) {
                 bestScore = score
                 bestChar = glyph.char
             }
         }
-        return if (bestChar != null && bestScore >= minSimilarity) bestChar.toString() else null
+        if (bestChar != null && bestScore >= minSimilarity) return bestChar.toString()
+
+        // Phase 2: size-mismatch fallback. The Army/training-page capacity text ("160/340") is
+        // drawn smaller (~12px) than the resource numbers the library was harvested from (~15px),
+        // so the same-size comparison can never reach the threshold. Scale each glyph to the
+        // component size and compare again; this recovers the smaller in-game font without new
+        // harvest data. Only digit-sized blobs are considered, to avoid matching noise.
+        if (component.height in 8..34 && component.width in 3..40) {
+            var scaledChar: Char? = null
+            var scaledScore = 0.0
+            for (glyph in glyphs) {
+                val score = scaledAgreement(glyph, component)
+                if (score > scaledScore) {
+                    scaledScore = score
+                    scaledChar = glyph.char
+                }
+            }
+            if (scaledChar != null && scaledScore >= minSimilarity) return scaledChar.toString()
+        }
+        return null
+    }
+
+    /** Agreement over the padded max bounding box (original comparison). */
+    private fun paddedAgreement(glyph: Glyph, component: Component): Double {
+        val rows = maxOf(glyph.height, component.height)
+        val cols = maxOf(glyph.width, component.width)
+        var matched = 0
+        for (y in 0 until rows) {
+            for (x in 0 until cols) {
+                val glyphBit = y < glyph.height && x < glyph.width && glyph.bits[y * glyph.width + x]
+                val inkBit = y < component.height && x < component.width && component.mask[y * component.width + x]
+                if (glyphBit == inkBit) matched++
+            }
+        }
+        return matched.toDouble() / (rows * cols).toDouble()
+    }
+
+    /** Agreement after nearest-neighbour scaling the glyph to the component's size. */
+    private fun scaledAgreement(glyph: Glyph, component: Component): Double {
+        val h = component.height
+        val w = component.width
+        var matched = 0
+        for (y in 0 until h) {
+            val gy = y * glyph.height / h
+            for (x in 0 until w) {
+                val gx = x * glyph.width / w
+                val glyphBit = glyph.bits[gy * glyph.width + gx]
+                val inkBit = component.mask[y * w + x]
+                if (glyphBit == inkBit) matched++
+            }
+        }
+        return matched.toDouble() / (h * w).toDouble()
     }
 }

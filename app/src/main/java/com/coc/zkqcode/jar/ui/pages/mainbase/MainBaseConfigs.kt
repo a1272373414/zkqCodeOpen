@@ -44,7 +44,7 @@ fun LazyListScope.MainBaseConfig(
             SettingSwitchIcon(key = "${MAIN_BASE_SETTINGS.CLAIM_DAILY_REWARD.key}_c$index")
             SettingSwitchIcon(key = "${MAIN_BASE_SETTINGS.AUTO_ATTACK.key}_c$index")
             Text(
-                text = "辅助会自动配兵，若想手动配兵，请勾选手动配兵选项。",
+                text = "辅助会按「造兵方案」自动配兵；选择「手动配兵」则跳过配兵，由你在游戏内自行配置。\n注意：辅助不会自动开启超级兵。",
                 style = MaterialTheme.typography.labelMedium,
             )
             SettingInputRow(key = "${MAIN_BASE_SETTINGS.GOLD_REQUIREMENT.key}_c$index")
@@ -81,8 +81,9 @@ fun LazyListScope.MainBaseConfig(
                 SettingSwitchIcon(
                     key = "${MAIN_BASE_SETTINGS.RESTART_GAME.key}_c$index", explain = "勾选后，部署完所有部队后，辅助会重启游戏。仅对主世界对战有效。"
                 )
-                SettingSwitchIcon(
-                    key = "${MAIN_BASE_SETTINGS.MANUAL_TRAINING.key}_c$index", explain = "勾选后，辅助将不会进入配兵页面，请手动配兵。\n\n注意：辅助不会自动开启超级兵。"
+                SettingDropdown(
+                    key = "${MAIN_BASE_SETTINGS.ARMY_PLAN.key}_c$index",
+                    options = listOf("蛮弓胖保底", "闪电飞龙", "镜像飞龙", "图腾飞龙", "手动配兵")
                 )
 //                SettingSwitchIcon(
 //                    key = "${MAIN_BASE_SETTINGS.CHANGE_HEROES.key}_c$index",

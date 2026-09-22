@@ -13,7 +13,8 @@ import com.coc.zkqcode.jar.code.universal.enterMainScreen
 import com.coc.zkqcode.jar.code.universal.smalltools.StorageKeys
 import com.coc.zkqcode.jar.code.universal.smalltools.checkMemoryFile
 import com.coc.zkqcode.jar.code.universal.smalltools.getBooleanConfigRuntime
-import com.coc.zkqcode.jar.code.universal.smalltools.writeMemory
+import com.coc.zkqcode.jar.code.universal.smalltools.getConfigRuntime
+import com.coc.zkcode.jar.code.universal.smalltools.writeMemory
 import com.coc.zkqcode.jar.code.mainbase.MainBaseArmyRecognizer
 import com.coc.zkqcode.jar.code.universal.SceneState
 import com.coc.zkqcode.jar.code.universal.GameScene
@@ -123,6 +124,9 @@ private const val MAX_PICKER_PAGES = 6
 /** 连续多少页没找到任何目标兵种就提前结束翻页（避免面板到头后空滑）。 */
 private const val EMPTY_PAGE_LIMIT = 2
 
+/** 方案 0（蛮弓胖）在读不到兵营容量时的保底总容量（TH 中等水平，真机校准容量区域后可去掉）。 */
+private const val DEFAULT_TOTAL_HOUSING = 240
+
 /**
  * 活动内容（可选配置）：活动兵 / 活动法术 / 活动攻城器。
  *
@@ -152,6 +156,47 @@ private fun trainCardOf(name: String): ColorSchema? = EVENT_TROOP_CARDS[name] ?:
 /** 查兵种默认造兵次数。 */
 private fun trainCountOf(name: String): Int =
     DEFAULT_COUNT[name] ?: EVENT_TROOP_COUNTS[name] ?: 10
+
+/**
+ * 翻页扫描选兵/选法术面板，返回 [troopNames]/[spellNames] 中已解锁（卡片存在）的兵种/法术名集合。
+ * 用于判断所选造兵方案所需兵种/法术是否可用；不可用时调用方回退到保底方案。
+ */
+private suspend fun detectUnlocked(troopNames: List<String>, spellNames: List<String>): Set<String> {
+    val found = mutableSetOf<String>()
+    if (troopNames.isNotEmpty()) {
+        switchTrainingTab(TAB_TROOPS.first, TAB_TROOPS.second, MyColors.TrainBarbarian, "检测兵种")
+        pinPickerToFirstPage()
+        var page = 1
+        var empty = 0
+        while (page <= MAX_PICKER_PAGES && empty < EMPTY_PAGE_LIMIT && found.size < troopNames.size) {
+            var hits = 0
+            for (n in troopNames) if (n !in found) {
+                trainCardOf(n)?.let { if (findMultiColors(it) != null) { found.add(n); hits++ } }
+            }
+            empty = if (hits == 0) empty + 1 else 0
+            page++
+            nextPickerPage()
+        }
+        // 回到圣水兵面板，方便后续训练与关闭
+        switchTrainingTab(TAB_TROOPS.first, TAB_TROOPS.second, MyColors.TrainBarbarian, "回到圣水兵")
+    }
+    if (spellNames.isNotEmpty()) {
+        switchTrainingTab(TAB_SPELLS.first, TAB_SPELLS.second, MyColors.TrainLighteningSpell, "检测法术")
+        pinPickerToFirstPage()
+        var page = 1
+        var empty = 0
+        while (page <= MAX_PICKER_PAGES && empty < EMPTY_PAGE_LIMIT && found.size < troopNames.size + spellNames.size) {
+            var hits = 0
+            for (n in spellNames) if (n !in found) {
+                SPELL_CARD[n]?.let { if (findMultiColors(it) != null) { found.add(n); hits++ } }
+            }
+            empty = if (hits == 0) empty + 1 else 0
+            page++
+            nextPickerPage()
+        }
+    }
+    return found
+}
 
 /**
  * 关闭选兵面板（左上角 X）。**只在面板确实打开时才点**：
@@ -325,34 +370,43 @@ suspend fun mainBaseTrainTroops(): Boolean {
             }
         }
 
-        // Train Troops Tab (圣水兵) — verify the colored barbarian card appears.
+        // ============ 造兵方案（训练侧，与下兵解耦；不含英雄/攻城器）============
+        val armyPlanIndex = getConfigRuntime(Schema.MAIN_BASE_SETTINGS.ARMY_PLAN.key).toIntOrNull() ?: 0
+        var plan = ArmyPlan.fromIndex(armyPlanIndex)
+        // 手动配兵（方案 4）或旧版手动开关：跳过训练，保留用户配兵
+        if (plan == ArmyPlan.MANUAL || getBooleanConfigRuntime(Schema.MAIN_BASE_SETTINGS.MANUAL_TRAINING.key)) {
+            ShowMessage("账号${InGamesVars.currentAccountNumber}，手动配兵，跳过训练")
+            writeMemory(storageKey, (System.currentTimeMillis() / 60_000).toString())
+            GlobalVars.absorbEdge = 0
+            return enterMainScreen()
+        }
+
+        // 方案 1/2/3 检测所需兵种/法术是否解锁；未解锁则回退方案 0（保底）
+        if (plan != ArmyPlan.BARB_ARCH_GIANT) {
+            val troopNames = planTroops(plan).map { it.first }
+            val spellNames = planSpells(plan).map { it.first }
+            val unlocked = detectUnlocked(troopNames, spellNames)
+            val missing = (troopNames + spellNames).filter { it !in unlocked }
+            if (missing.isNotEmpty()) {
+                ShowMessage("账号${InGamesVars.currentAccountNumber}，方案「${plan.label}」未解锁：${missing.joinToString("、")}，回退蛮弓胖保底")
+                plan = ArmyPlan.BARB_ARCH_GIANT
+            }
+        }
+
+        // 兵种训练（圣水兵面板）
         SceneState.setFlowNode("练兵-圣水兵")
         switchTrainingTab(TAB_TROOPS.first, TAB_TROOPS.second, MyColors.TrainBarbarian, "圣水兵")
-
-        // 兵种识别接入：识别当前部队配置（14 槽位）中的兵种，作为造兵依据（"按识别结果造兵"）
-        val recognized = runCatching { MainBaseArmyRecognizer.recognizeTroopNames() }.getOrElse { emptyList() }
-        if (recognized.isNotEmpty()) {
-            ShowMessage("账号${InGamesVars.currentAccountNumber}，当前部队：${recognized.joinToString("、")}")
+        val troopTargets: List<TrainTarget> = if (plan == ArmyPlan.BARB_ARCH_GIANT) {
+            val total = readTroopHousingTotal() ?: DEFAULT_TOTAL_HOUSING
+            val troopSplit = planBarbArchGiantTroops(total)
+            ShowMessage("账号${InGamesVars.currentAccountNumber}，兵营容量≈$total，蛮弓胖：${troopSplit.joinToString("、") { (n, c) -> "$n×$c" }}")
+            troopSplit
         } else {
-            ShowMessage("账号${InGamesVars.currentAccountNumber}，兵种识别为空，回退核心造兵计划")
-        }
+            planTroops(plan)
+        }.mapNotNull { (name, count) -> trainCardOf(name)?.let { TrainTarget(name, it, count) } }
+        trainByFeatures("兵种", troopTargets)
 
-        // 按识别出的兵种，去训练列表逐页定位并造兵。
-        // 定位方式沿用原脚本：每个兵种有自己的训练卡片特征（MainBaseTrainCardColors，迁移自「造XX」），
-        // 在当前页找不到就翻页重试 —— 不依赖兵种顺序/位置，最左侧的活动兵（数量/名称不固定）不影响定位。
-        val pending = LinkedHashSet(recognized).mapNotNull { name ->
-            trainCardOf(name)?.let { name to it }
-        }.toMutableList()
-        // 识别为空、或识别出的兵种都没有对应训练卡片（例如当前部队全是不认识的活动兵）时，
-        // 回退核心兵种计划，避免静默不造兵。
-        if (pending.isEmpty()) {
-            ShowMessage("账号${InGamesVars.currentAccountNumber}，识别结果无可用训练卡片，回退核心造兵计划")
-            CORE_FALLBACK.forEach { name -> trainCardOf(name)?.let { pending += name to it } }
-        }
-
-        trainByFeatures("兵种", pending.map { (name, feature) -> TrainTarget(name, feature, trainCountOf(name)) })
-
-        // Close tab and Clean Queue 2
+        // 关闭面板 + 清法术队列
         closePickerIfOpen()
         point = findMultiColorsUntil(schemas = listOf(MyColors.DeleteAll2), duration = 500)
         if (point != null) {
@@ -363,32 +417,19 @@ suspend fun mainBaseTrainTroops(): Boolean {
             }
         }
 
-        // Spell Tab (法术) — verify the lightning spell card appears.
+        // 法术训练（法术面板）
         SceneState.setFlowNode("练兵-法术")
         switchTrainingTab(TAB_SPELLS.first, TAB_SPELLS.second, MyColors.TrainLighteningSpell, "法术")
         if (findMultiColorsUntil(schemas = listOf(MyColors.TrainLighteningSpell), duration = 500) != null) {
-            // 原为 3 个写死坐标共 8 次点击，现改为按特征定位（见 SPELL_PLAN）
-            trainByFeatures("法术", SPELL_PLAN)
-        }
-
-        // Close tab and Clean Queue 3
-        closePickerIfOpen()
-        point = findMultiColorsUntil(schemas = listOf(MyColors.DeleteAll3), duration = 500)
-        if (point != null) {
-            TouchActions.tap(point.x, point.y)
-            delayWithMultiplier(500)
-            findMultiColorsUntil(schemas = listOf(MyColors.MiddleGreenYes), duration = 1500)?.let {
-                TouchActions.tap(it.x, it.y, delayTime = 500)
+            val spellTargets = planSpells(plan).mapNotNull { (name, count) ->
+                SPELL_CARD[name]?.let { TrainTarget(name, it, count) }
             }
+            trainByFeatures("法术", spellTargets)
         }
 
-        // Siege Machines Tab (攻城机器) — verify the siege machine card appears.
-        SceneState.setFlowNode("练兵-攻城机器")
-        switchTrainingTab(TAB_SIEGE.first, TAB_SIEGE.second, MyColors.TrainSiegeMachine, "攻城机器")
-        if (findMultiColorsUntil(schemas = listOf(MyColors.TrainSiegeMachine), duration = 500) != null) {
-            // 原为 4 个写死坐标各点 1 次，现改为按特征定位（见 SIEGE_PLAN）
-            trainByFeatures("攻城机器", SIEGE_PLAN)
-        }
+        // 回到圣水兵面板并关闭选兵面板（方案不含攻城器/英雄，不再清空与训练攻城机器）
+        switchTrainingTab(TAB_TROOPS.first, TAB_TROOPS.second, MyColors.TrainBarbarian, "回到圣水兵")
+        closePickerIfOpen()
 
         // Final Close：先清掉可能存在的弹窗（有黑色遮罩时，下面窗口的关闭按钮也会点不中）
         sweepBlockingPopups()

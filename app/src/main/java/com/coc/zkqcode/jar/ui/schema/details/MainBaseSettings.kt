@@ -16,6 +16,8 @@ object MainBaseSettings {
         "stop_battle_after_full_resources", "资源满后停止对战", 1, "MAIN_BASE_SETTINGS"
     )
     val MANUAL_TRAINING = SettingDef("manual_training", "手动配兵", 0, "MAIN_BASE_SETTINGS")
+    // 造兵方案：0 蛮弓胖保底 / 1 闪电飞龙 / 2 镜像飞龙 / 3 图腾飞龙 / 4 手动配兵（下拉存选项下标）
+    val ARMY_PLAN = SettingDef("army_plan", "造兵方案", "0", "MAIN_BASE_SETTINGS")
     val TACTICS_MODE = SettingDef("tactics_mode", "战术设置", "0", "MAIN_BASE_SETTINGS")
     // 下兵方式 / 援兵位置：对应源脚本的 `活鱼下兵方式` / `援兵位置`（下拉存的是选项下标）
     val DEPLOY_MODE = SettingDef("deploy_mode", "下兵方式", "0", "MAIN_BASE_SETTINGS")
@@ -142,6 +144,7 @@ object MainBaseSettings {
         DYNAMIC_ADJUSTMENT,
         STOP_BATTLE_AFTER_FULL_RESOURCES,
         MANUAL_TRAINING,
+        ARMY_PLAN,
         TACTICS_MODE,
         DEPLOY_MODE,
         DEPLOY_SIDE,
