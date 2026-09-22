@@ -114,6 +114,7 @@ object PixelFontOcr {
 
         val components = labelComponents(ink, width, height)
             .filter { it.width in minGlyphWidth..maxGlyphSize && it.height in minGlyphHeight..maxGlyphSize }
+            .flatMap { splitTouchingGlyphs(it) }   // undo 8-connected merges of touching digits
             .sortedWith(compareBy<Component> { it.top }.thenBy { it.left })
 
         if (components.isEmpty()) return ""
@@ -179,6 +180,71 @@ object PixelFontOcr {
         val left: Int, val top: Int, val right: Int, val bottom: Int,
         val mask: BooleanArray, val width: Int, val height: Int
     )
+
+    /**
+     * Undo 8-connectivity merges of touching digits. Two adjacent glyphs whose strokes touch
+     * become one component (e.g. the "34" of "340/340" on some devices), which then matches no
+     * glyph and is dropped. A single glyph in this font is at most as wide as it is tall, so a
+     * wider component is split at the interior column with the fewest ink pixels (the valley
+     * between the two glyphs) and the halves are checked again (handles 3+ merged digits).
+     */
+    private fun splitTouchingGlyphs(component: Component): List<Component> {
+        if (component.height < 8) return listOf(component)
+        if (component.width <= component.height * 4 / 3) return listOf(component)
+        val columnInk = IntArray(component.width)
+        for (x in 0 until component.width) {
+            for (y in 0 until component.height) {
+                if (component.mask[y * component.width + x]) columnInk[x]++
+            }
+        }
+        val lo = component.width / 3
+        val hi = component.width * 2 / 3
+        var cut = -1
+        var fewest = Int.MAX_VALUE
+        for (x in lo..hi) {
+            if (columnInk[x] < fewest) {
+                fewest = columnInk[x]
+                cut = x
+            }
+        }
+        if (cut <= 0 || cut >= component.width - 1) return listOf(component)
+        return splitTouchingGlyphs(subComponent(component, 0, cut)) +
+            splitTouchingGlyphs(subComponent(component, cut, component.width))
+    }
+
+    /** Crop [component] to the columns [x0, x1) and trim it to the ink bounding box. */
+    private fun subComponent(component: Component, x0: Int, x1: Int): Component {
+        var minX = Int.MAX_VALUE
+        var minY = Int.MAX_VALUE
+        var maxX = -1
+        var maxY = -1
+        for (y in 0 until component.height) {
+            for (x in x0 until x1) {
+                if (component.mask[y * component.width + x]) {
+                    if (x < minX) minX = x
+                    if (x > maxX) maxX = x
+                    if (y < minY) minY = y
+                    if (y > maxY) maxY = y
+                }
+            }
+        }
+        if (maxX < 0) return component
+        val w = maxX - minX + 1
+        val h = maxY - minY + 1
+        val mask = BooleanArray(w * h)
+        for (y in minY..maxY) {
+            for (x in minX..maxX) {
+                if (component.mask[y * component.width + x]) {
+                    mask[(y - minY) * w + (x - minX)] = true
+                }
+            }
+        }
+        return Component(
+            component.left + minX, component.top + minY,
+            component.left + maxX, component.top + maxY,
+            mask, w, h
+        )
+    }
 
     private fun labelComponents(ink: BooleanArray, width: Int, height: Int): List<Component> {
         val visited = BooleanArray(width * height)

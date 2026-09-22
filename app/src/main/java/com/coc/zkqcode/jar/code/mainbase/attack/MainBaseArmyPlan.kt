@@ -77,7 +77,7 @@ fun planBarbArchGiantTroops(totalHousing: Int): List<Pair<String, Int>> {
 }
 
 /**
- * 读取训练页/军队页顶部的兵营容量总数（"已用/总" 中的总数）。
+ * 读取训练页/军队页顶部的兵营容量 "已用/总"，返回 (已用, 总数)。
  *
  * 区域与源脚本一致：源脚本 `awcocx_main.lua` 的 `函数247a`（v=="兵"）在竖屏读
  * `(540,400)-(566,666)`（找到兵营图标时为 `(540, intY+18)-(566, intY+110)`）。
@@ -89,14 +89,19 @@ fun planBarbArchGiantTroops(totalHousing: Int): List<Pair<String, Int>> {
  */
 private val CAPACITY_REGION = intArrayOf(580, 153, 666, 179)
 
-suspend fun readTroopHousingTotal(): Int? {
+suspend fun readTroopHousing(): Pair<Int, Int>? {
     val text = PixelFontOcr.recognizeDigits(
         CAPACITY_REGION[0], CAPACITY_REGION[1], CAPACITY_REGION[2], CAPACITY_REGION[3],
         grayMin = 160, grayMax = 255, maxSaturation = 70
     ) ?: return null
-    // '/' 不在像素字库里，识别结果形如 "160?340"（'?' 是斜杠的占位），因此不能按 '/' 切分；
-    // 改为按数字分组、取最后一组作为总数（与都城 readCapacity 的做法一致）。
-    return Regex("\\d+").findAll(text)
+    // 形如 "340/340"（'/' 现已可识别）；个别情况 '/' 仍可能退化成 '?'，所以按数字分组最稳：
+    // 取「最后两组」= (已用, 总)，语义同源脚本的 splitStr(ret, "/")。
+    val numbers = Regex("\\d+").findAll(text)
         .mapNotNull { it.value.toIntOrNull() }
-        .lastOrNull()
+        .toList()
+    if (numbers.size < 2) return null
+    return numbers[numbers.size - 2] to numbers[numbers.size - 1]
 }
+
+/** 只取兵营容量上限（总数），供旧调用点使用。 */
+suspend fun readTroopHousingTotal(): Int? = readTroopHousing()?.second

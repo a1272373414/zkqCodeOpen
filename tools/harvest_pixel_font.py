@@ -269,15 +269,16 @@ def write_kotlin(entries):
  * becomes ink and neighbouring digits merge. Regenerate with:
  *   python tools/harvest_pixel_font.py
  *
- * Contains digits 0-9; '.' and '/' still come from the legacy library (see below).
+ * Contains digits 0-9 and '.'; the CURRENT-build '/' glyphs are appended by
+ * tools/harvest_slash.py (run it AFTER this script).
  */
 internal const val PIXEL_FONT_DIGITS: String = """
 %s
 %s
 """
-''' % (body, LEGACY_SEPARATORS.strip())
+''' % (body, LEGACY_DOTS)
     io.open(OUT_KT, 'w', encoding='utf-8').write(kt)
-    print('wrote %s (%d entries)' % (OUT_KT, len(entries) + LEGACY_SEPARATORS.strip().count('\n') + 1))
+    print('wrote %s (%d entries)' % (OUT_KT, len(entries) + LEGACY_DOTS.count('\n') + 1))
 
 
 # Legacy entries kept for '.' and '/' (used by "8/12" style army counts). These are copied
@@ -367,6 +368,12 @@ LEGACY_SEPARATORS = """/|14,9|m70u30S1WE0m70S3WE0m7
 /|12,7|WO430WO430mO61
 /|11,7|GC21WGC20WO43
 /|12,8|mC1WO30G60mC1WS3"""
+
+# The legacy '/' shapes target an OLD font and score only ~0.6 on the current build (which made
+# "used/total" read as "340?340"), so they are intentionally NOT emitted here. Only '.' is kept;
+# refresh '/' with tools/harvest_slash.py and run it AFTER this script.
+LEGACY_DOTS = '\n'.join(
+    ln for ln in LEGACY_SEPARATORS.strip().split('\n') if ln.split('|')[0] == '.')
 
 
 if __name__ == '__main__':

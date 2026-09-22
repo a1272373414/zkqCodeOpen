@@ -132,11 +132,44 @@ def match_glyph(cm, glyphs, min_sim=0.75, size_tol=2):
     return best_ch if best_score >= min_sim else None, best_score
 
 
+def _bbox(sub):
+    ys, xs = np.where(sub)
+    if len(ys) == 0:
+        return None
+    return int(ys.min()), int(ys.max()), int(xs.min()), int(xs.max())
+
+
+def split_wide(c):
+    """Mirror PixelFontOcr.splitTouchingGlyphs: split a too-wide (touching-digit) component."""
+    minx, miny, maxx, maxy, sub = c
+    h, w = sub.shape
+    if h < 8 or w <= h * 4 // 3:
+        return [c]
+    col = sub.sum(axis=0)
+    lo, hi = w // 3, 2 * w // 3
+    cut = lo + int(np.argmin(col[lo:hi + 1]))
+    if cut <= 0 or cut >= w - 1:
+        return [c]
+    out = []
+    for s, ox in ((sub[:, :cut], 0), (sub[:, cut:], cut)):
+        bb = _bbox(s)
+        if bb is None:
+            continue
+        y0, y1, x0, x1 = bb
+        out += split_wide((minx + ox + x0, miny + y0, minx + ox + x1, miny + y1,
+                           s[y0:y1 + 1, x0:x1 + 1]))
+    return out
+
+
 def recognize_lines(img, gray_min, gray_max, max_sat, glyphs,
                     min_w=2, max_size=50, min_h=3, word_gap=12):
     mask = ink_mask(img, gray_min, gray_max, max_sat)
-    comps = [c for c in components(mask)
-             if min_w <= (c[2] - c[0] + 1) <= max_size and min_h <= (c[3] - c[1] + 1) <= max_size]
+    comps = []
+    for c in components(mask):
+        w = c[2] - c[0] + 1
+        h = c[3] - c[1] + 1
+        if min_w <= w <= max_size and min_h <= h <= max_size:
+            comps += split_wide(c)
     comps.sort(key=lambda c: (c[1], c[0]))
     lines = []
     for c in comps:

@@ -124,7 +124,7 @@ private const val MAX_PICKER_PAGES = 6
 /** 连续多少页没找到任何目标兵种就提前结束翻页（避免面板到头后空滑）。 */
 private const val EMPTY_PAGE_LIMIT = 2
 
-/** 方案 0（蛮弓胖）在读不到兵营容量时的保底总容量（TH 中等水平，真机校准容量区域后可去掉）。 */
+/** 读不到兵营容量（OCR 失败）时的保底总容量（TH 中等水平）。容量区域已校准，见 MainBaseArmyPlan.CAPACITY_REGION。 */
 private const val DEFAULT_TOTAL_HOUSING = 240
 
 /**
@@ -397,9 +397,14 @@ suspend fun mainBaseTrainTroops(): Boolean {
         SceneState.setFlowNode("练兵-圣水兵")
         switchTrainingTab(TAB_TROOPS.first, TAB_TROOPS.second, MyColors.TrainBarbarian, "圣水兵")
         val troopTargets: List<TrainTarget> = if (plan == ArmyPlan.BARB_ARCH_GIANT) {
-            val total = readTroopHousingTotal() ?: DEFAULT_TOTAL_HOUSING
-            val troopSplit = planBarbArchGiantTroops(total)
-            ShowMessage("账号${InGamesVars.currentAccountNumber}，兵营容量≈$total，蛮弓胖：${troopSplit.joinToString("、") { (n, c) -> "$n×$c" }}")
+            // 读 "已用/总"，按「剩余可训练 = 总 - 已用」分配（队列刚清空时 已用=0，即按总容量分配）；
+            // 已用==总 说明兵营已满，分配为 0（等于不训练），与源脚本的 `可训练 = 总单位 - 已训练` 同义。
+            val housing = readTroopHousing()
+            val total = housing?.second ?: DEFAULT_TOTAL_HOUSING
+            val used = housing?.first ?: 0
+            val room = (total - used).coerceAtLeast(0)
+            val troopSplit = planBarbArchGiantTroops(room)
+            ShowMessage("账号${InGamesVars.currentAccountNumber}，兵营容量 $used/$total（可训练 $room），蛮弓胖：${troopSplit.joinToString("、") { (n, c) -> "$n×$c" }}")
             troopSplit
         } else {
             planTroops(plan)

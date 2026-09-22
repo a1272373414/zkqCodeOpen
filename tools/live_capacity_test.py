@@ -26,14 +26,15 @@ GLYPHS = parse_glyphs()
 
 
 def read_capacity(rgb):
-    """Return (text, total, per_group_texts) using the app's region + matcher + parse."""
+    """Return (text, (used, total) | None, per_group_texts) using the app's region + matcher + parse."""
     x0, y0, x1, y1 = CAPACITY_REGION
     sub = rgb[y0:y1, x0:x1]
     lines = recognize_lines(sub, 160, 255, 70, GLYPHS)
     groups = [t for (_, _, _, _, t, _) in lines]
     text = ''.join(groups)
     nums = [int(m) for t in groups for m in re.findall(r'\d+', t)]
-    return text, (nums[-1] if nums else None), groups
+    pair = (nums[-2], nums[-1]) if len(nums) >= 2 else None
+    return text, pair, groups
 
 
 def main():
@@ -61,13 +62,14 @@ def main():
     shot = gs.cap('cap_capacity.png')
 
     rgb = np.asarray(Image.open(shot).convert('RGB'))
-    text, total, groups = read_capacity(rgb)
+    text, pair, groups = read_capacity(rgb)
     print('-' * 50)
     print('CAPACITY_REGION =', CAPACITY_REGION)
-    print('分组文本 =', groups)
-    print('整串     =', repr(text))
-    print('识别总数 =', total)
-    print('截图     =', shot)
+    print('分组文本   =', groups)
+    print('整串       =', repr(text))
+    print('识别(已用,总) =', pair)
+    print('判定满     =', None if pair is None else pair[0] >= pair[1])
+    print('截图       =', shot)
     print('(真值请人工核对截图中的 "已用/总")')
 
 
