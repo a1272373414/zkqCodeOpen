@@ -16,6 +16,8 @@ import com.coc.zkqcode.jar.code.universal.InGamesVars
 import com.coc.zkqcode.jar.code.universal.clickRightBottom
 import com.coc.zkqcode.jar.code.universal.colors.findMultiColors
 import com.coc.zkqcode.jar.code.universal.colors.findMultiColorsUntil
+import com.coc.zkqcode.jar.code.universal.deploy.DeployGeometry
+import com.coc.zkqcode.jar.code.universal.deploy.DeployType
 import com.coc.zkqcode.jar.code.universal.enterMainScreen
 import com.coc.zkqcode.jar.code.universal.smalltools.StorageKeys
 import com.coc.zkqcode.jar.code.universal.smalltools.checkMemoryFile
@@ -172,40 +174,37 @@ private suspend fun deployAndExit() {
 }
 
 private suspend fun normalBattle(isNormal: Boolean = true) {
-    // Define possible deploy positions for each swipe direction
-    val deployPositions = listOf(
-        Pair(605, 553), Pair(108, 183), Pair(330, 358), Pair(855, 371)
-    )
-
-    val alternativeDeployPositions = listOf(
-        Pair(663, 205), Pair(1160, 564), Pair(913, 385), Pair(433, 374), Pair(758, 274)
-    )
-
     pinchIn(141, 423, 1052, 352, 638, 365, duration = 200)
 
-    // Choose swipe direction and corresponding deploy positions
-    val useRightSwipe = Random.nextBoolean()
-    val positions = if (useRightSwipe) deployPositions else alternativeDeployPositions
-    delayWithMultiplier(100)
-    if (useRightSwipe) {
+    // 源四象限下兵几何（替换原先写死的 deployPositions / alternativeDeployPositions 随机点表）：
+    // 随机选一个象限，落点取其「中间 + 兵种偏移」（DeployType.TROOP 偏移为 0）。
+    val side = (DeployGeometry.topSides + DeployGeometry.bottomSides).random()
+    if (side.isTop) {
         swipe(981, 485, 0, 0, delayTime = 120)
     } else {
         swipe(100, 117, 1280, 720, delayTime = 120)
     }
+    delayWithMultiplier(100)
+    val deployPos = DeployGeometry.middleTap(side, DeployType.TROOP)
 
-    // Deploy machine and troops to the same random position
-    val deployPos = positions.random()
-    TouchActions.tap(125, 610, delayTime = 200) // Battle Machine
-    TouchActions.tap(deployPos.first, deployPos.second, delayTime = 200) // Deploy the Machine
+    // 战争机器：优先用色特征精确定位机器卡（旧代码写死 tap(125,610)），找不到再退回旧坐标。
+    val machine = findMultiColors(schema = MyColors.BuilderBaseMachine)
+    if (machine != null) {
+        TouchActions.tap(machine.x, machine.y, delayTime = 200)
+    } else {
+        accountLog("未找到战争机器特征，退回固定坐标 (125,610)")
+        TouchActions.tap(125, 610, delayTime = 200)
+    }
+    TouchActions.tap(deployPos.x, deployPos.y, delayTime = 200) // Deploy the Machine
     if (!isNormal) return
     val generalTroops = findMultiColorsUntil(schemas = listOf(MyColors.TroopsWithSkills, MyColors.TroopsWithOutSkills), duration = 200)
     if (generalTroops != null) {
-        ShowMessage("准备点击女巫，点击坐标${generalTroops.x + 1}, 610\n当前部署位置${deployPos.first}, ${deployPos.second}")
+        ShowMessage("准备点击女巫，点击坐标${generalTroops.x + 1}, 610\n当前部署位置${deployPos.x}, ${deployPos.y}")
         delayWithMultiplier(1500)
         TouchActions.tap(generalTroops.x + 15, 620, delayTime = 200) // Troops
         val nightWitch = findMultiColors(schema = MyColors.NightWitch)
         if (nightWitch != null) {
-            TouchActions.touchDown((deployPos.first + Random.nextInt(1, 4)).toFloat(), (deployPos.second + Random.nextInt(1, 4)).toFloat(), 1)
+            TouchActions.touchDown((deployPos.x + Random.nextInt(1, 4)).toFloat(), (deployPos.y + Random.nextInt(1, 4)).toFloat(), 1)
             delayWithMultiplier(4000)
             TouchActions.touchUp(1)
             accountLog("等女巫走一会")
@@ -223,17 +222,17 @@ private suspend fun normalBattle(isNormal: Boolean = true) {
             }
         } else {
             attemptLoop@ for (attempt in 0 until 5) {
-                // Step 1: Touch down at a random position
-                var currentPos = deployPositions.random()
-                TouchActions.touchDown(deployPos.first.toFloat(), deployPos.second.toFloat(), 1)
+                // Step 1: Touch down at the chosen quadrant point
+                var currentPos = deployPos
+                TouchActions.touchDown(deployPos.x.toFloat(), deployPos.y.toFloat(), 1)
                 delayWithMultiplier(600)
 
-                // Steps 2-3: Move smoothly to random positions until barbarian is gone
+                // Steps 2-3: Move smoothly along the quadrant line until the barbarian is gone
                 var moveCount = 0
                 while (true) {
-                    val nextPos = deployPositions.random()
+                    val nextPos = DeployGeometry.spreadTap(side, Random.nextInt(0, 4), 4, DeployType.TROOP)
                     TouchActions.moveSmoothly(
-                        fromX = currentPos.first.toFloat(), fromY = currentPos.second.toFloat(), toX = nextPos.first.toFloat(), toY = nextPos.second.toFloat(), duration = Random.nextInt(200, 500)
+                        fromX = currentPos.x.toFloat(), fromY = currentPos.y.toFloat(), toX = nextPos.x.toFloat(), toY = nextPos.y.toFloat(), duration = Random.nextInt(200, 500)
                     )
                     currentPos = nextPos
                     moveCount++
