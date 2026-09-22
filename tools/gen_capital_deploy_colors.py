@@ -44,6 +44,11 @@ LISTS = {
     '偷袭法术下兵点': 'CapitalSneakSpellPoints',
     '偷袭冰冻法术下兵点': 'CapitalSneakFreezePoints',
 }
+# 颜色字符1a : grass / terrain signatures the legacy script matches to find deploy points
+# (it scans 3 expanding portrait regions; we keep their union, already mapped to landscape).
+TERRAIN_KEY = '颜色字符1a'
+TERRAIN_PROP = 'CapitalDeployTerrain'
+TERRAIN_REGION = (208, 94, 1030, 499)
 
 
 def balanced(text, start):
@@ -160,14 +165,38 @@ def main():
         lists[key] = items
         print('%s -> %d entries' % (key, len(items)), file=sys.stderr)
 
+    terrain = []
+    tb = get_table(text, TERRAIN_KEY)
+    if tb:
+        for g in split_top(tb):
+            g = g.strip()
+            if not g.startswith('{'):
+                continue
+            vals = [v.strip().strip('"') for v in split_top(g[1:-1])]
+            if len(vals) >= 2:
+                terrain.append({'main': vals[0], 'offsets': vals[1]})
+    print('%s -> %d entries' % (TERRAIN_KEY, len(terrain)), file=sys.stderr)
+
     iface = ['    val %s: ColorSchema' % p for p in DEPLOY.values()]
     iface += ['    val %s: List<ColorSchema>' % p for p in LISTS.values()]
+    iface.append('    val %s: List<ColorSchema>' % TERRAIN_PROP)
     obj = [member(DEPLOY[k], tuples[k]) for k in DEPLOY if k in tuples]
     for k in LISTS:
         if k not in lists:
             continue
         items = ',\n'.join(parse_expr(f, LISTS[k], '        ') for f in lists[k])
         obj.append('    override val %s = listOf(\n%s,\n    )' % (LISTS[k], items))
+    if terrain:
+        tx1, ty1, tx2, ty2 = TERRAIN_REGION
+        items = ',\n'.join(
+            '        ColorSchema.parse(\n'
+            '            %d, %d, %d, %d, "%s",\n'
+            '            "%s",\n'
+            '            0, 0.98, "%s"\n'
+            '        )' % (tx1, ty1, tx2, ty2, f['main'], convert_offsets(f['offsets']),
+                        TERRAIN_PROP)
+            for f in terrain)
+        obj.append('    override val %s = listOf(\n%s,\n    )' % (TERRAIN_PROP, items))
 
     kt = '''@file:Suppress("PropertyName")
 

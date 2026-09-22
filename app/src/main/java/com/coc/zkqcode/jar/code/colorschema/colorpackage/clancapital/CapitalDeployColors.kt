@@ -31,6 +31,7 @@ interface ICapitalDeployColors {
     val CapitalLowHpTargets: List<ColorSchema>
     val CapitalSneakSpellPoints: List<ColorSchema>
     val CapitalSneakFreezePoints: List<ColorSchema>
+    val CapitalDeployTerrain: List<ColorSchema>
 }
 
 object CapitalDeployColors : ICapitalDeployColors {
@@ -528,6 +529,28 @@ object CapitalDeployColors : ICapitalDeployColors {
             174, 138, 1188, 572, "7F8591-101010",
             "3|-1|6F7378-101010,-2|-6|DAECFF-101010,1|-6|AEBCCA-101010,1|-14|3F7FEA-101010,-1|-11|689DEA-101010,-2|-16|44B7F5-101010",
             0, 0.9, "CapitalSneakFreezePoints"
+        ),
+    )
+    override val CapitalDeployTerrain = listOf(
+        ColorSchema.parse(
+            208, 94, 1030, 499, "68B573",
+            "4|-3|68B574,8|-1|68B673,5|2|67B473,5|-1|68B674",
+            0, 0.98, "CapitalDeployTerrain"
+        ),
+        ColorSchema.parse(
+            208, 94, 1030, 499, "62B16E",
+            "4|-3|5FAD6A,8|0|5FAD6B,5|3|60AF6D,5|0|5FAC6A",
+            0, 0.98, "CapitalDeployTerrain"
+        ),
+        ColorSchema.parse(
+            208, 94, 1030, 499, "6ED893",
+            "-1|0|70DB95,1|0|71DA93",
+            0, 0.98, "CapitalDeployTerrain"
+        ),
+        ColorSchema.parse(
+            208, 94, 1030, 499, "63C88B",
+            "1|-1|66CD8F",
+            0, 0.98, "CapitalDeployTerrain"
         ),
     )
 }
