@@ -355,6 +355,29 @@ fun LazyListScope.MainBaseConfig(
                 }
             }
         }
+    }
+
+    // 都城突袭设置（M4-③）：领币 / 捐币 / 发起突袭 / 打突袭 / 攻打前自动配兵。
+    item {
+        SettingSection(visible = isExpanded) {
+            Column {
+                FlowRow {
+                    SettingSwitchIcon(key = "${MAIN_BASE_SETTINGS.PLAY_RAID.key}_c$index")
+                    SettingSwitchIcon(key = "${MAIN_BASE_SETTINGS.START_RAID.key}_c$index")
+                    SettingSwitchIcon(key = "${MAIN_BASE_SETTINGS.CLAIM_CAPITAL_GOLD.key}_c$index")
+                    SettingSwitchIcon(key = "${MAIN_BASE_SETTINGS.DONATE_CAPITAL_GOLD.key}_c$index")
+                    SettingSwitchIcon(
+                        key = "${MAIN_BASE_SETTINGS.TRAIN_CAPITAL_ARMY.key}_c$index",
+                        explain = "勾选后，进入战斗前若都城军队为空，辅助会先按「都城大本等级」自动配兵再进攻。坐标/面板判定仍待真机验证。"
+                    )
+                }
+                AnimatedVisibility(visible = GlobalVars.configStates["${MAIN_BASE_SETTINGS.TRAIN_CAPITAL_ARMY.key}_c$index"]?.value == "1") {
+                    SettingInputRowWithSuffix(
+                        key = "${MAIN_BASE_SETTINGS.CAPITAL_HALL_LEVEL.key}_c$index", suffix = "级"
+                    )
+                }
+            }
+        }
     }/* // Clan join
     // Consecutive clans & Invite
     item {

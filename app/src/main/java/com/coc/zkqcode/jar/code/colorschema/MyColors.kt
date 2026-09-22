@@ -40,6 +40,8 @@ import com.coc.zkqcode.jar.code.colorschema.colorpackage.clancapital.CapitalArmy
 import com.coc.zkqcode.jar.code.colorschema.colorpackage.clancapital.ICapitalArmyColors
 import com.coc.zkqcode.jar.code.colorschema.colorpackage.clancapital.CapitalDeployColors
 import com.coc.zkqcode.jar.code.colorschema.colorpackage.clancapital.ICapitalDeployColors
+import com.coc.zkqcode.jar.code.colorschema.colorpackage.clancapital.CapitalRaidColors
+import com.coc.zkqcode.jar.code.colorschema.colorpackage.clancapital.ICapitalRaidColors
 import com.coc.zkqcode.jar.code.colorschema.colorpackage.mainbase.IMainBaseClanColors
 import com.coc.zkqcode.jar.code.colorschema.colorpackage.mainbase.IMainBaseHeroHallColors
 import com.coc.zkqcode.jar.code.colorschema.colorpackage.mainbase.MainBaseClanColors
@@ -64,6 +66,7 @@ object MyColors : IUIColors by UIColors, IFeatureColors by FeatureColors, IMainB
     IClanCapitalTutorialColors by ClanCapitalTutorialColors, IMainBaseAttackColors by MainBaseAttackColors, IMainBaseClanColors by MainBaseClanColors, IMainBaseHeroHallColors by MainBaseHeroHallColors,
     ICapitalTroopColors by CapitalTroopColors, ICapitalArmyColors by CapitalArmyColors,
     ICapitalDeployColors by CapitalDeployColors,
+    ICapitalRaidColors by CapitalRaidColors,
     IMainBaseTroopColors by MainBaseTroopColors,
     IMainBaseBlackElixirTroopColors by MainBaseBlackElixirTroopColors,
     IMainBaseSuperTroopColors by MainBaseSuperTroopColors,

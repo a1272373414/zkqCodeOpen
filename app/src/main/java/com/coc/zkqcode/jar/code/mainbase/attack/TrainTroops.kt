@@ -14,7 +14,7 @@ import com.coc.zkqcode.jar.code.universal.smalltools.StorageKeys
 import com.coc.zkqcode.jar.code.universal.smalltools.checkMemoryFile
 import com.coc.zkqcode.jar.code.universal.smalltools.getBooleanConfigRuntime
 import com.coc.zkqcode.jar.code.universal.smalltools.getConfigRuntime
-import com.coc.zkcode.jar.code.universal.smalltools.writeMemory
+import com.coc.zkqcode.jar.code.universal.smalltools.writeMemory
 import com.coc.zkqcode.jar.code.mainbase.MainBaseArmyRecognizer
 import com.coc.zkqcode.jar.code.universal.SceneState
 import com.coc.zkqcode.jar.code.universal.GameScene

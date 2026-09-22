@@ -12,6 +12,7 @@ import com.coc.zkqcode.jar.code.colorschema.ColorSchema
 import com.coc.zkqcode.jar.code.colorschema.MyColors
 import com.coc.zkqcode.jar.code.universal.InGamesVars
 import com.coc.zkqcode.jar.code.universal.colors.findMultiColors
+import com.coc.zkqcode.jar.code.universal.smalltools.detectStuckNetworkSpinner
 import com.coc.zkqcode.jar.code.universal.smalltools.isGameAtFront
 import com.coc.zkqcode.jar.code.universal.smalltools.runGame
 import com.topjohnwu.superuser.Shell
@@ -226,6 +227,15 @@ suspend fun detectCurrentScene(byteBuffer: ScreenCaptureManager.CaptureResult? =
     // 3. Battle: the full 进攻！ launch button (distinct from the training-page 进攻 button).
     if (findMultiColors(byteBuffer = screen, schema = MyColors.AttackButton, increment = 1) != null) {
         return GameScene.BATTLE
+    }
+
+    // 3.5 Clan capital (都城): the bottom-left 回营 / 都城 entry button. It is asked only AFTER the
+    //     village / training / battle questions, because the very same button also exists in a normal
+    //     village (there the village markers above already answered, so it is never ambiguous here).
+    // TODO(待采集)：ClanCapitalEntry 在本部落都城页实测不命中（主色命中但偏移点失配），
+    // 识别都城需要按 A 页重新采集特征；此处先保留，等新特征到位后替换。
+    if (findMultiColors(byteBuffer = screen, schema = MyColors.ClanCapitalEntry, increment = 1) != null) {
+        return GameScene.CLAN_CAPITAL
     }
 
     // 4. Still undecided: a popup covering the builder-icon row is the most likely cause, and it
@@ -573,6 +583,12 @@ suspend fun handleRunControl(): Boolean {
     // raise NETWORK_ERROR so the user sees it and we wait for recovery instead of failing obscurely.
     if (SceneState.currentRunControl == GameRunControl.RUNNING && !isNetworkConnected()) {
         SceneState.setRunControl(GameRunControl.NETWORK_ERROR)
+    }
+    // 游戏卡死兜底：画面中央橙色转圈 12 秒无变化 = 网络异常 → 重启游戏。
+    // 放在主循环每轮调用处，覆盖所有日常流程（等待循环则由 checkReconnections 负责）。
+    if (SceneState.currentRunControl == GameRunControl.RUNNING && detectStuckNetworkSpinner()) {
+        SceneState.setRunControl(GameRunControl.RESTART_GAME)
+        return true
     }
     return when (val control = SceneState.currentRunControl) {
         GameRunControl.RUNNING -> true

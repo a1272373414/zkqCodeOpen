@@ -64,10 +64,10 @@ object FeatureColors : IFeatureColors {
         "0|1|205c93,0|3|1c5487,-3|-2|a0f3fd,3|-2|a0f3fd,0|-1|9ef0fd",
         0, 0.85, "通用对话框"
     )
-    // Return-to-camp button at the lower left
+    // Return-to-camp button at the lower left（都城界面左下角"回营"：米色圆底 + 棕红"回营"字）
     override val BottomLeftReturnToCamp = ColorSchema.parse(
-        23, 541, 178, 693, "7F9DFF-101010",
-        "5|0|7FA4FF-101010,27|-7|728AE8-101010,19|-32|2548B7-101010,5|-34|2849C1-101010,18|-41|3B58CC-101010,-17|-16|1F38AD-101010,14|14|7093D5-101010",
+        0, 480, 220, 660, "8EC0F1-101010",
+        "-12|0|8EC0F1-101010,6|0|85BCEF-101010,18|0|8EBFF1-101010,24|0|8DBEF0-101010,-12|-6|3C67B7-101010,12|-6|3967B6-101010,24|-6|3966B5-101010",
         0, 0.9, "左下角回营"
     )
     // Main village return-to-camp confirmation

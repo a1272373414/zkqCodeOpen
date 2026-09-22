@@ -74,6 +74,11 @@ object MainBaseSettings {
     val START_LEAGUE_SETTINGS = SettingDef("start_league_settings", "发起联赛", 0, "MAIN_BASE_SETTINGS")
     val START_CLAN_WAR_SETTINGS = SettingDef("start_clan_war_settings", "发起部落战", 0, "MAIN_BASE_SETTINGS")
     val START_RAID = SettingDef("start_raid", "发起都城突袭", 0, "MAIN_BASE_SETTINGS")
+    // 都城：攻打前是否自动配兵（源脚本「首次造兵」逻辑，对应预留的 prepareCapitalArmy）。
+    // 默认关闭，避免误触；真机验证坐标/面板判定后再放开。
+    val TRAIN_CAPITAL_ARMY = SettingDef("train_capital_army", "攻打前自动配兵", 0, "MAIN_BASE_SETTINGS")
+    // 都城大本等级：决定配兵方案（≤8 / 9 / 10），同时作为容量读不到时的兜底。默认 10 级（满级容量）。
+    val CAPITAL_HALL_LEVEL = SettingDef("capital_hall_level", "都城大本等级", "10", "MAIN_BASE_SETTINGS")
 
     ////////////
     val BUY_STAR_ORE_WITH_RAID_MEDAL =
@@ -188,6 +193,8 @@ object MainBaseSettings {
         START_LEAGUE_SETTINGS,
         START_CLAN_WAR_SETTINGS,
         START_RAID,
+        TRAIN_CAPITAL_ARMY,
+        CAPITAL_HALL_LEVEL,
         BUY_STAR_ORE_WITH_RAID_MEDAL,
         BUY_CLOCK_TOWER_POTION_WITH_RAID_MEDAL,
         BUY_RING_OF_WALL_WITH_RAID_MEDAL,

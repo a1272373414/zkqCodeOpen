@@ -6,6 +6,7 @@ import com.coc.zkqcode.core.util.basic.ShowMessage
 import com.coc.zkqcode.core.util.basic.delayWithMultiplier
 import com.coc.zkqcode.core.util.basic.waitForPlay
 import com.coc.zkqcode.jar.code.builderbase.playBuilderBase
+import com.coc.zkqcode.jar.code.clancapital.playClanCapital
 import com.coc.zkqcode.jar.code.mainbase.playMainBase
 import com.coc.zkqcode.jar.code.universal.GameVersion
 import com.coc.zkqcode.jar.code.universal.InGamesVars
@@ -102,6 +103,12 @@ suspend fun runMainScript() {
             }
             if (!playMainBase()) {
                 ShowMessage("主世界对战完成，准备切换账号")
+                return@stepBlock
+            }
+            // 都城阶段（M4-③）：领都城币 / 捐都城币 / 发起突袭 / 打突袭，由各自的配置开关控制。
+            // 约定与 playBuilderBase 一致：返回 false = 本阶段结束（无配置或无目标时也会立刻返回）。
+            if (!playClanCapital()) {
+                ShowMessage("都城流程完成，准备切换账号")
                 return@stepBlock
             }
         }

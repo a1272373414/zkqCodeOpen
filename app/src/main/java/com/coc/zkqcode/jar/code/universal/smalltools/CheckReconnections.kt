@@ -4,6 +4,7 @@ import android.os.Environment
 import com.coc.zkqcode.core.data.database.GlobalVars
 import com.coc.zkqcode.core.system.screencapture.ScreenCaptureManager
 import com.coc.zkqcode.core.util.basic.RunShell
+import com.coc.zkqcode.core.util.basic.ShowMessage
 import com.coc.zkqcode.core.util.fileactions.LogHelper.logAndRestart
 import com.coc.zkqcode.core.util.touchactions.TouchActions
 import com.coc.zkqcode.jar.code.colorschema.MyColors
@@ -17,6 +18,9 @@ suspend fun checkReconnections(): Boolean {
     // 1. Capture the screen and cast safely
 
     checkPrivacy()
+
+    // 网络异常兜底：中央橙色转圈卡死超过 12 秒 → 直接重启游戏
+    if (detectStuckNetworkSpinner()) return true
 
     // 2. Define the schemas to check against
     // ReloadGameButton 是"还在吗？…您已断开连接。"弹窗里"重新载入游戏"按钮的文字特征，
@@ -81,6 +85,76 @@ suspend fun checkReconnections(): Boolean {
  * Counts pixels in the given region where R, G, B are all greater than 235 (white).
  * Uses absolute ByteBuffer.get(index) so it is position-independent.
  */
+private const val SPINNER_X1 = 400
+private const val SPINNER_Y1 = 250
+private const val SPINNER_X2 = 880
+private const val SPINNER_Y2 = 500
+private const val SPINNER_MIN_ORANGE = 300
+private const val SPINNER_STUCK_MS = 12_000L
+private const val SPINNER_SAMPLE_MS = 2_000L
+
+/**
+ * 画面中央的橙色转圈 = 网络异常（连接卡死）。
+ * 橙色图标存在，且 12 秒内该区域画面没有任何变化 → 重启游戏。
+ *
+ * @return true 表示已判定网络异常并重启了游戏。
+ */
+suspend fun detectStuckNetworkSpinner(): Boolean {
+    val first = ScreenCaptureManager.capture(asBitmap = false) as? ScreenCaptureManager.CaptureResult ?: return false
+    if (countOrangePixels(first) < SPINNER_MIN_ORANGE) return false
+    val start = System.currentTimeMillis()
+    var prev = first
+    while (System.currentTimeMillis() - start < SPINNER_STUCK_MS) {
+        delay(SPINNER_SAMPLE_MS)
+        val next = ScreenCaptureManager.capture(asBitmap = false) as? ScreenCaptureManager.CaptureResult ?: continue
+        if (countOrangePixels(next) < SPINNER_MIN_ORANGE) return false
+        if (frameDiffPixels(prev, next) > 200) return false
+        prev = next
+    }
+    ShowMessage("检测到中央橙色转圈卡死超过12秒（网络异常），重启游戏")
+    killGame()
+    runGame()
+    return true
+}
+/** 统计中央区域里的橙色像素数（橙色转圈口径：R 高、G 中、B 低）。 */
+private fun countOrangePixels(screen: ScreenCaptureManager.CaptureResult): Int {
+    var count = 0
+    val buf = screen.buffer
+    for (y in SPINNER_Y1 until SPINNER_Y2) {
+        for (x in SPINNER_X1 until SPINNER_X2) {
+            val o = y * screen.rowStride + x * screen.pixelStride
+            val r = buf.get(o).toInt() and 0xFF
+            val g = buf.get(o + 1).toInt() and 0xFF
+            val b = buf.get(o + 2).toInt() and 0xFF
+            if (r > 200 && g in 80..185 && b < 120) count++
+        }
+    }
+    return count
+}
+
+/** 两帧在中央区域里"变化明显"的像素数，用于判断画面是否卡死。 */
+private fun frameDiffPixels(
+    a: ScreenCaptureManager.CaptureResult,
+    b: ScreenCaptureManager.CaptureResult
+): Int {
+    var diff = 0
+    for (y in SPINNER_Y1 until SPINNER_Y2) {
+        for (x in SPINNER_X1 until SPINNER_X2) {
+            for (c in 0 until 3) {
+                val oa = y * a.rowStride + x * a.pixelStride + c
+                val ob = y * b.rowStride + x * b.pixelStride + c
+                val va = a.buffer.get(oa).toInt() and 0xFF
+                val vb = b.buffer.get(ob).toInt() and 0xFF
+                if (va - vb > 30 || vb - va > 30) {
+                    diff++
+                    break
+                }
+            }
+        }
+    }
+    return diff
+}
+
 private fun countWhitePixels(
     screenBuffer: ScreenCaptureManager.CaptureResult, x1: Int, y1: Int, x2: Int, y2: Int
 ): Int {
