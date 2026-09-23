@@ -37,6 +37,26 @@ private fun accountLog(msg: String) = ShowMessage.run("账号${InGamesVars.curre
 // T16：记录夜飞机(空中机器)卡槽位置，供 realAttack 循环释放技能（每局 normalBattle 重置）
 private var battleCopterSlot: Point? = null
 
+// T16：记录战争机器(夜世界王)卡槽位置。英雄技能就绪(粉光)时应点击"英雄卡槽"本身释放技能，
+// 原实现点 (x, y+100) 会落到卡槽之外，导致英雄技能一直放不出来。
+private var machineSlot: Point? = null
+
+/**
+ * 夜世界候选下兵点：对四象限部署线各取样若干点（[DeployGeometry.spreadTap]），
+ * 覆盖"线内侧(可能落在基地建筑区)→线外侧(基地外围草地区)"的整条范围。
+ * 下兵时选卡后依次尝试这些点，只要有一个落在可部署区即会成功，
+ * 避免像单点那样一旦压到基地建筑区就整局下不出兵。
+ */
+private fun buildDeployPoints(): List<Point> {
+    val points = ArrayList<Point>()
+    for (side in DeployGeometry.topSides + DeployGeometry.bottomSides) {
+        for (i in 0 until 5) {
+            points.add(DeployGeometry.spreadTap(side, i, 5, DeployType.TROOP))
+        }
+    }
+    return points
+}
+
 // Elevated from local nested function to private top-level for reusability
 private suspend fun tapRepeat(x: Int, y: Int, times: Int = 12) {
     repeat(times) {
@@ -160,8 +180,12 @@ private suspend fun realAttack(mode: String, battleNumber: Int = 1, battleTimes:
 
         val machineSkills = findMultiColors(byteBuffer = capturedScreen, schema = MyColors.MachineSkills)
 
-        if (machineSkills != null) {
-            TouchActions.tap(machineSkills.x, machineSkills.y + 100, delayTime = 200)
+        // T16：战争机器技能就绪（粉光）时，点英雄卡槽本身释放技能（与夜飞机口径一致）。
+        // 原实现点 (machineSkills.x, machineSkills.y + 100) 偏移过大落到卡槽之外，技能一直没放出。
+        if (machineSkills != null && machineSlot != null) {
+            val slot = machineSlot!!
+            accountLog("释放战争机器技能 @(${slot.x},${slot.y})")
+            TouchActions.tap(slot.x, slot.y, delayTime = 200)
         }
         // T16：夜飞机（空中机器）技能自动释放（源 战斗监控 16652~16670）。
         // 夜飞机技能就绪时卡槽旁出现粉光(FFB2FF/FE3AC7)，按卡槽位置 rescope 检测后点槽释放。
@@ -196,8 +220,9 @@ private suspend fun deployAndExit() {
 private suspend fun normalBattle(isNormal: Boolean = true) {
     pinchIn(141, 423, 1052, 352, 638, 365, duration = 200)
 
-    // 源四象限下兵几何（替换原先写死的 deployPositions / alternativeDeployPositions 随机点表）：
-    // 随机选一个象限，落点取其「中间 + 兵种偏移」（DeployType.TROOP 偏移为 0）。
+    // 源四象限下兵几何：随机选一个象限用于滑屏视角。
+    // 落点不再用"象限中点单点"——实机发现该点会压在基地建筑区(不可下兵区域)，
+    // 改为四象限部署线上的多点候选，选卡后依次尝试（详见 [buildDeployPoints]）。
     val side = (DeployGeometry.topSides + DeployGeometry.bottomSides).random()
     if (side.isTop) {
         swipe(981, 485, 0, 0, delayTime = 120)
@@ -205,30 +230,33 @@ private suspend fun normalBattle(isNormal: Boolean = true) {
         swipe(100, 117, 1280, 720, delayTime = 120)
     }
     delayWithMultiplier(100)
-    val deployPos = DeployGeometry.middleTap(side, DeployType.TROOP)
+    val deployPoints = buildDeployPoints()
 
     // 战争机器：优先用色特征精确定位机器卡（旧代码写死 tap(125,610)），找不到再退回旧坐标。
+    machineSlot = null
     val machine = findMultiColors(schema = MyColors.BuilderBaseMachine)
     if (machine != null) {
         TouchActions.tap(machine.x, machine.y, delayTime = 200)
+        machineSlot = Point(machine.x, machine.y) // T16：记录卡槽位置供技能释放
     } else {
         accountLog("未找到战争机器特征，退回固定坐标 (125,610)")
         TouchActions.tap(125, 610, delayTime = 200)
     }
-    TouchActions.tap(deployPos.x, deployPos.y, delayTime = 200) // 战争机器落点
+    // 英雄为单体，选卡后依次点候选落点，只会在第一个可部署点落下
+    for (p in deployPoints) TouchActions.tap(p.x, p.y, delayTime = 150)
 
-    // T14：夜飞机（空中机器）英雄部署。源 `函数323a` 先放夜世界王再放夜飞机，均落向所选方向中间点。
+    // T14：夜飞机（空中机器）英雄部署。源 `函数323a` 先放夜世界王再放夜飞机。
     battleCopterSlot = null
     val copter = findMultiColors(schema = MyColors.BuilderBaseBattleCopter)
     if (copter != null) {
         TouchActions.tap(copter.x, copter.y, delayTime = 200)
-        TouchActions.tap(deployPos.x, deployPos.y, delayTime = 200) // 夜飞机落点
         battleCopterSlot = Point(copter.x, copter.y) // T16：记录卡槽位置供技能释放
+        for (p in deployPoints) TouchActions.tap(p.x, p.y, delayTime = 150)
     } else {
         accountLog("未找到夜飞机特征，跳过（本账号可能未解锁战斗直升机）")
     }
     if (!isNormal) return
-    deployAllTroops(side, deployPos)
+    deployAllTroops(deployPoints)
 }
 
 /**
@@ -236,16 +264,12 @@ private suspend fun normalBattle(isNormal: Boolean = true) {
  * 先放夜巫（保留技能循环）、再放野蛮（保留铺线滑动），最后遍历其余兵种卡槽，
  * 识别到点槽即逐一点下放空（与源 `函数323a` 对每个兵种点槽+落点的口径一致）。
  */
-private suspend fun deployAllTroops(side: DeploySide, deployPos: Point) {
-    // 夜巫：保留技能循环（源 函数323a 对女巫用外围点，这里沿用既有实现）
+private suspend fun deployAllTroops(deployPoints: List<Point>) {
+    // 夜巫：选卡后依次尝试候选落点直到女巫卡放空（替代原先固定单点落点）
     val nightWitch = findMultiColors(schema = MyColors.NightWitch)
     if (nightWitch != null) {
-        ShowMessage("准备点击女巫，点击坐标${nightWitch.x + 1}, 620\n当前部署位置${deployPos.x}, ${deployPos.y}")
-        delayWithMultiplier(1500)
-        TouchActions.tap(nightWitch.x + 15, 620, delayTime = 200)
-        TouchActions.touchDown((deployPos.x + Random.nextInt(1, 4)).toFloat(), (deployPos.y + Random.nextInt(1, 4)).toFloat(), 1)
-        delayWithMultiplier(4000)
-        TouchActions.touchUp(1)
+        accountLog("夜世界：部署暗夜女巫（候选落点 ${deployPoints.size} 个）")
+        deployTroopUntilGone(deployPoints, MyColors.NightWitch)
         accountLog("等女巫走一会")
         delayWithMultiplier(Random.nextInt(5000, 10000))
         repeat(6) {
@@ -260,32 +284,13 @@ private suspend fun deployAllTroops(side: DeploySide, deployPos: Point) {
             }
         }
     }
-    // 野蛮：保留铺线滑动（源 函数323a 普通兵种用中间点 + 滑动）
+    // 野蛮人
     val barbarian = findMultiColors(schema = MyColors.BuilderBaseBarbarian)
     if (barbarian != null) {
-        attemptLoop@ for (attempt in 0 until 5) {
-            var currentPos = deployPos
-            TouchActions.touchDown(deployPos.x.toFloat(), deployPos.y.toFloat(), 1)
-            delayWithMultiplier(600)
-            var moveCount = 0
-            while (true) {
-                val nextPos = DeployGeometry.spreadTap(side, Random.nextInt(0, 4), 4, DeployType.TROOP)
-                TouchActions.moveSmoothly(
-                    fromX = currentPos.x.toFloat(), fromY = currentPos.y.toFloat(), toX = nextPos.x.toFloat(), toY = nextPos.y.toFloat(), duration = Random.nextInt(200, 500)
-                )
-                currentPos = nextPos
-                moveCount++
-                if (moveCount % 3 == 0) {
-                    val b = findMultiColors(schema = MyColors.BuilderBaseBarbarian)
-                    if (b == null) {
-                        TouchActions.touchUp(1)
-                        break@attemptLoop
-                    }
-                }
-            }
-        }
+        accountLog("夜世界：部署野蛮人")
+        deployTroopUntilGone(deployPoints, MyColors.BuilderBaseBarbarian)
     }
-    // 其余兵种（皮卡/巨人/弓箭/炮车/炸弹/野猪/气球/龙宝/亡灵/法师）：识别到点槽即逐一点下放空
+    // 其余兵种（皮卡/巨人/弓箭/炮车/炸弹/野猪/气球/龙宝/亡灵/法师）
     val genericTroops = listOf(
         MyColors.BuilderBasePekka, MyColors.BuilderBaseGiant, MyColors.BuilderBaseGiantAlt,
         MyColors.BuilderBaseArcher, MyColors.BuilderBaseCannonCart, MyColors.BuilderBaseBomber,
@@ -293,13 +298,25 @@ private suspend fun deployAllTroops(side: DeploySide, deployPos: Point) {
         MyColors.BuilderBaseBabyDragonAlt, MyColors.BuilderBaseMinion, MyColors.BuilderBaseWizard
     )
     for (schema in genericTroops) {
-        var guard = 0
-        while (guard++ < 16) {
-            val slot = findMultiColors(schema = schema) ?: break
-            TouchActions.tap(slot.x, slot.y, delayTime = 150)
-            TouchActions.tap(deployPos.x, deployPos.y, delayTime = 200)
+        deployTroopUntilGone(deployPoints, schema)
+    }
+}
+
+/**
+ * T15 修复：选一次兵卡，然后依次点候选落点，直到该兵种卡消失（=已放完，口径同都城
+ * `CapitalAttack.deployTroop`）或达到轮次上限。这样即使个别候选点落在不可下兵区域，
+ * 也会自动换其他候选点，不会像单点那样整局下不出兵。
+ */
+private suspend fun deployTroopUntilGone(deployPoints: List<Point>, schema: ColorSchema): Boolean {
+    val card = findMultiColors(schema = schema) ?: return false
+    TouchActions.tap(card.x, card.y, delayTime = 150)
+    repeat(20) {
+        for (p in deployPoints) {
+            TouchActions.tap(p.x, p.y, delayTime = 50)
+            if (findMultiColors(schema = schema) == null) return true
         }
     }
+    return findMultiColors(schema = schema) == null
 }
 
 private suspend fun waitLoop() {

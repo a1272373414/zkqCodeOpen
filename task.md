@@ -1,0 +1,111 @@
+# 开发任务清单（Task Tracking）
+
+> 本文件是 **开发任务的唯一基准（Single Source of Truth）**。
+> 功能对比与缺口分析见 `docs/源项目功能对比与移植计划.md`，本文件只管「做什么、做到哪了」。
+
+---
+
+## 一、管理规则（必读）
+
+1. **唯一基准**：所有开发任务的新增、拆分、状态变更、完成判定，**一律以本文件为准**。禁止只在对话里口头确定任务而不回填本文件。
+2. **新增任务**：在对应阶段表格**追加一行**（取下一个 `Txx` 编号），并在「更新记录」追加一条（日期 + 新增内容 + 依据）。
+3. **更新任务**：修改对应行的「状态」列，并在「更新记录」追加一条（日期 + 任务ID + 状态变化 + 说明）。**不要删除历史记录行**，已完成的任务保留并标记 ✅。
+4. **状态图例**（状态列只能取以下之一）：
+   - ⬜ 待办（未开始）
+   - 🔄 进行中
+   - ✅ 已完成
+   - ⏸ 暂停（阻塞/等待依赖）
+   - ❌ 已取消 / 不抄（须在备注写清原因）
+5. **编号规则**：任务 ID 固定为 `T01`、`T02`…… 顺序分配，不回收、不重排；即使中间有任务取消，ID 也不复用。
+6. **完成标准**：代码落地 + 必要的真机/模拟器验证通过（`tools/live_*_test` 或 `emulator-5556` 实机标定）+ 无新增 lint 错误，方可在状态列置 ✅。
+7. **与计划文档关系**：`docs/源项目功能对比与移植计划.md` 的「§5 开发任务计划」是任务来源；两者的任务 ID/状态以**本文件为准**，计划文档仅供对照参考。
+8. **进度同步**：每次更新后，维护底部「进度汇总」的计数（总数 / ✅ / 🔄 / 其他）。
+
+---
+
+## 二、任务列表
+
+### P0 — 基础增强（低风险，非业务缺口）
+
+| ID | 任务 | 目标文件(当前项目) | 工作量 | 优先级 | 源依据 | 状态 | 备注 |
+|---|---|---|---|---|---|---|---|
+| T01 | 坐标归一化集成 pass | `app/.../zkqcode/jar` CoordNormalizer 集成 | 1天 | 低 | 源 r()/b() | ⬜ | 把散落硬编码字面量替换为归一化调用 |
+| T02 | NCC 接入 OCR pipeline | `NccMatcher.kt` 接线 | 1天 | 低 | 源 ncc.c | ⬜ | 当前已实现未接线，作为 PixelFontOcr 兜底 |
+| T03 | 特征带方向搜索 | `FindMultiColors.kt` / Rust | 1天 | 低 | 源 函数24a/26a | ⬜ | 评估是否给找色增加方向参数提升滑动场景鲁棒性 |
+
+### P1 — 明确缺失，直接抄（高优先）
+
+| ID | 任务 | 目标文件(当前项目) | 工作量 | 优先级 | 源依据 | 状态 | 备注 |
+|---|---|---|---|---|---|---|---|
+| T04 | 换阵(战争基地阵型切换) | `jar/code/mainbase/warbase/ChangeWarBase.kt` | 1天 | 高 | 源 换阵(48) | ⬜ | 复用已有 CHANGE_BASE 设置，补逻辑 |
+| T05 | 协议弹窗双确认强化 | `jar/code/universal/smalltools/AgreementPopups.kt` | 0.5天 | 高 | 源 函数10a/301a | ⬜ | 腾讯协议双确认 + 谷歌"全部接受" |
+| T06 | 都城部署精炼 + 实机验证 | `jar/code/clancapital/attack/CapitalAttack.kt` | 2天 | 高 | 源 突袭打野 | ⏸ | 用户 2026-09-23 决定延后，先做夜世界 |
+| T07 | 部落竞赛 ClanGames | `jar/code/mainbase/clangames/ClanGames.kt` + Settings + colorpackage | 2天 | 高 | 源 竞赛(135) | ⬜ | 需从 awcocx 反推挑战类型与兵种映射 |
+| T08 | 每周精选/商人购买 | `jar/code/mainbase/trader/Trader.kt` + colors | 1.5天 | 高 | 源 商人(18)+精选(20) | ⬜ | 识别商人页商品→按资源/宝石买周精选 |
+| T09 | 部落战进攻 ClanWar | `jar/code/mainbase/clanwar/ClanWar.kt` | 2天 | 高 | 源 部落战(209) | ⬜ | 复用 MainBaseDeployTroops 部署器 |
+
+### P2 — 识别/标签增强（中优先）
+
+| ID | 任务 | 目标文件(当前项目) | 工作量 | 优先级 | 源依据 | 状态 | 备注 |
+|---|---|---|---|---|---|---|---|
+| T10 | 联赛 CWL 进攻 | `jar/code/mainbase/league/League.kt` | 1天 | 中 | 源 联赛(67) | ⬜ | 接 PLAY_LADDER 设置，复用进攻部署 |
+| T11 | 中文玩家名 OCR | `jar/code/.../recognizer/PixelFontChinese.kt` + `tools/harvest_chinese_font.py` | 2天 | 中 | 源 font_chinese + 函数21a | ⬜ | 建中文像素字库，供部落名/村庄名读取 |
+
+### P3 — 可选/低优
+
+| ID | 任务 | 目标文件(当前项目) | 工作量 | 优先级 | 源依据 | 状态 | 备注 |
+|---|---|---|---|---|---|---|---|
+| T12 | 大字号 OCR | `jar/code/.../recognizer/PixelFontLarge.kt` | 0.5天 | 低 | 源 函数315a(19×18) | ⬜ | 大数字字库 |
+| T13 | 地图缩放检测移植 | `jar/code/universal/map/MapLocator.kt` | 1天 | 低 | 源 coc-assist MapLocator | ⬜ | 四边缘森林色占比→缩放0-3 |
+
+### 夜世界（Builder Base）增强（对齐源 函数123a/323a）
+
+> 当前项目 `BuilderBaseAttack.kt` 已实现打鱼/练兵/升级主流程（判为已覆盖），但对照源 `awcocx_main.lua` 的 `函数123a(下兵)` / `函数323a(双指滑屏放兵)` / 战斗监控(16606~16669)，存在以下可抄增强点。
+
+| ID | 任务 | 目标文件(当前项目) | 工作量 | 优先级 | 源依据 | 状态 | 备注 |
+|---|---|---|---|---|---|---|---|
+| T14 | 夜世界夜飞机(空中机器)英雄部署 | `jar/code/builderbase/attack/BuilderBaseAttack.kt` | 1天 | 中 | 源 夜飞机槽(15979) | 🔄 | 代码已实现，用户手动验证中 |
+| T15 | 夜世界多兵种识别与批量下兵 | `jar/code/builderbase/attack/BuilderBaseAttack.kt` + `builderbase` colors | 2天 | 中 | 源 函数123a(15997~16071) | 🔄 | 12 兵种颜色 + `deployAllTroops`；**实机发现单点落点会压到基地建筑区(不可下兵)**，已改为四象限多点候选 `buildDeployPoints()` + `deployTroopUntilGone()` 选卡后试至兵卡消失，待验证 |
+| T16 | 夜世界英雄技能自动释放 | `jar/code/builderbase/attack/BuilderBaseAttack.kt` | 1天 | 中 | 源 战斗监控(16606~16669) | 🔄 | 夜飞机按卡槽 rescope 检测粉光后点槽；**实机发现战争机器点 (x, y+100) 落到卡槽外**，已改为记录 `machineSlot` 并在粉光就绪时点卡槽释放，待验证 |
+| T17 | 场景识别健壮性（载入页/战斗中/编辑模式/未识别重试） | `jar/code/universal/SceneState.kt` + `colorpackage/UIColors.kt` | 1天 | 高 | 15 张实机未识别 debug 截图 | 🔄 | 新增 `GameScene.LOADING` 与特征 `GameLoadingNotice`(合规黑屏)/`BuilderBaseEditMode`(夜世界编辑模式)；战斗中(`EndBattle`等)归 `BATTLE`；未识别先等 1.5s×2 重试、载入等待 15–90s；载入页不再按返回（修复游戏退出确认弹窗），待验证 |
+| T18 | 日志分级与文件落盘 | `core/util/basic/ShowMessage.kt` + `core/util/fileactions/LogHelper.kt` | 1天 | 中 | — | 🔄 | `ShowMessage` 恢复旧 `invoke` 入口(保持旧 jar 二进制兼容)并新增 `run()/warn()/error()/log()`；`LogHelper` 按 DEBUG(全量 VERBOSE)/RELEASE(仅 INFO+) 分级落文件、缓冲 100→200；夜世界里程碑改 `ShowMessage.run()`，待验证 |
+
+---
+
+## 三、决策记录（已明确不抄项，留存追溯）
+
+| 项 | 决策 | 依据 | 日期 |
+|---|---|---|---|
+| 村庄改名 | ❌ 不抄 | 用户 2026-09-23 明确决定 | 2026-09-23 |
+| 部落靓标签筛选 | ❌ 不抄 | 用户 2026-09-23 明确决定 | 2026-09-23 |
+
+---
+
+## 四、进度汇总
+
+- 总任务数：18（T01–T18）
+- ✅ 已完成：0
+- 🔄 进行中：5（T14,T15,T16,T17,T18）
+- ⬜ 待办：12（T01–T05,T07–T13）
+- ⏸ 暂停：1（T06 延后）
+- ❌ 不抄/取消：2（村庄改名、部落靓标签，见决策记录）
+
+---
+
+## 五、更新记录
+
+| 日期 | 任务ID | 变更 | 说明 |
+|---|---|---|---|
+| 2026-09-23 | T01–T13 | 新建 | 由 `docs/源项目功能对比与移植计划.md` §5 导入全部开发任务，确立本文件为任务唯一基准 |
+| 2026-09-23 | — | 决策 | 村庄改名、部落靓标签标记为不抄（不立对应任务，记入决策记录） |
+| 2026-09-23 | T14–T16 | 新建 | 新增夜世界增强任务（夜飞机部署 / 多兵种识别批量下兵 / 英雄技能释放），对齐源 函数123a/323a |
+| 2026-09-23 | T06 | 状态 ⟳ | 用户决定延后都城，先做夜世界；T06 → ⏸ |
+| 2026-09-23 | T14 | 状态 ⟳ | 开始夜世界任务；T14 → 🔄 进行中 |
+| 2026-09-23 | T14 | 实现 | 新增 `BuilderBaseBattleCopter` 颜色(90°映射 (15,578,500,672))；`normalBattle()` 在战争机器后部署夜飞机落向 deployPos；无 lint 错误，待模拟器验证 |
+| 2026-09-23 | T15 | 实现 | 新增 12 个兵种卡槽颜色(区域 (15,612,1279,677)，偏移 90°旋转)；`normalBattle()` 重构为 `deployAllTroops()`，遍历夜巫/野蛮/其余10兵种逐一点下放空；无 lint 错误，待模拟器验证 |
+| 2026-09-23 | T16 | 实现 | 新增 `BattleCopterSkills`(+备选) 颜色(偏移 90°旋转)；`normalBattle()` 记录夜飞机卡槽位置，`realAttack()` 循环按卡槽 rescope 检测粉光并点槽放技能；无 lint 错误，待模拟器验证 |
+| 2026-09-23 | T15 | 修复 | 实机验证发现 `deployAllTroops` 单点落点会压到基地建筑区(不可下兵，日志落点 (374,240)/(370,407) 在基地内)；改为 `buildDeployPoints()` 四象限多点候选 + `deployTroopUntilGone()` 选卡后试至兵卡消失 |
+| 2026-09-23 | T16 | 修复 | 战争机器技能原点击 `(machineSkills.x, machineSkills.y + 100)` 落到英雄卡槽之外；改为记录 `machineSlot` 并在粉光就绪时点卡槽释放（与夜飞机一致） |
+| 2026-09-23 | T18 | 新建 | 日志分级与落盘：`ShowMessage` 恢复旧 `invoke` 入口(保持旧 jar/预编译代码二进制兼容，修复改签名引起的 NoSuchMethodError 崩溃)并新增 `run/warn/error/log`；`LogHelper` 按 DEBUG(全量)/RELEASE(仅 INFO+) 分级落文件、缓冲 100→200；夜世界流程日志改 `ShowMessage.run()` |
+| 2026-09-23 | T17 | 新建+实现 | 依据 15 张实机未识别 debug 截图（用户标注）：新增 `GameScene.LOADING` 与特征 `GameLoadingNotice`(合规黑屏)/`BuilderBaseEditMode`(夜世界编辑模式)；战斗中(`EndBattle`/`GiveUpButton`/`ExitBattleButton`/`CancelAttackSearch`)归 `BATTLE`；未识别先等 1.5s×2 重试、载入等待 15–90s；移除会与夜世界夜空互相误命中的"乌云"特征；修复载入页按返回触发游戏退出确认弹窗的问题 |
+| 2026-09-23 | T17 | 参数 | 载入等待上限 90s（常规 15s 即完成，版本更新时长载入由上限兜底）；非载入类未识别重试 2×1.5s 后才记入未识别 |

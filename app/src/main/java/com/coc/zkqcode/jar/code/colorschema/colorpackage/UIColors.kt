@@ -49,6 +49,12 @@ interface IUIColors {
 
     /** 掉线弹窗（"还在吗？因为太久没有进行操作，您已断开连接。"）里的"重新载入游戏"按钮文字。 */
     val ReloadGameButton: ColorSchema
+
+    /** 游戏启动/载入时的合规告示页（纯黑底 + 白色 SUPERCELL logo）。 */
+    val GameLoadingNotice: ColorSchema
+
+    /** 夜世界（建筑大师基地）布局"编辑模式"：右侧一列亮绿色按钮（删除模式关闭/移除全部/…/取消）。 */
+    val BuilderBaseEditMode: ColorSchema
 }
 
 object UIColors : IUIColors {
@@ -227,5 +233,26 @@ object UIColors : IUIColors {
         23, 429, 1279, 693, "C4CB80",
         "41|19|C4CB80,38|22|C4CB80,20|19|C4CB80,20|1|C4CB80,11|13|C4CB80,-7|19|C4CB80,-10|19|C4CB80,-19|19|C4CB80,29|1|C3CA80,44|16|C3CA7F,-1|1|C0C77E,26|16|BFC67E",
         0, 0.9, "重新载入游戏"
+    )
+
+    /**
+     * 游戏启动/载入的合规告示页（"健康游戏忠告" + SUPERCELL logo）：整屏纯黑底，仅少量白色文字。
+     * 特征 = 大面积纯黑（偏移点都落在背景黑处），据此与正常游戏画面区分。
+     * 命中后应"等待载入完成"，绝不能按返回键（按返回会弹出游戏自己的退出确认框）。
+     */
+    override val GameLoadingNotice = ColorSchema.parse(
+        0, 0, 1279, 719, "000000",
+        "150|150|000000,640|150|000000,1100|150|000000,150|520|000000,640|520|000000,1100|520|000000,640|700|000000",
+        0, 0.95, "游戏载入中(黑屏)"
+    )
+
+    /**
+     * 夜世界（建筑大师基地）布局编辑模式：右侧一列亮绿色按钮，采样自真实截图
+     * （RGB 9DDA45，BGR 即 45DA9D）。命中即说明当前停在编辑模式，应回退为"夜世界"而非未知页面。
+     */
+    override val BuilderBaseEditMode = ColorSchema.parse(
+        1085, 44, 1205, 68, "45DA9D",
+        "0|0|45DA9D,25|0|45DA9D,50|0|45DA9D,75|0|45DA9D",
+        0, 0.95, "夜世界编辑模式"
     )
 }

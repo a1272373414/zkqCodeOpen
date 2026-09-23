@@ -54,6 +54,12 @@ enum class GameScene(val displayName: String) {
     BUILDER_BASE("夜世界"),
     /** Clan capital. */
     CLAN_CAPITAL("都城"),
+    /**
+     * 游戏启动/载入/过渡界面（合规告示黑屏、"搜索对手"乌云等）。
+     * 这是**合法且短暂**的状态：调用方应继续等待载入完成，
+     * 绝不能对它按返回键（在游戏里按返回会弹出"确定退出游戏？"确认框）。
+     */
+    LOADING("载入中"),
     /** None of the known gameplay screens could be identified. */
     UNKNOWN("未知页面")
 }
@@ -210,6 +216,44 @@ suspend fun detectVillage(byteBuffer: ScreenCaptureManager.CaptureResult? = null
  * @return the detected [GameScene].
  */
 suspend fun detectCurrentScene(byteBuffer: ScreenCaptureManager.CaptureResult? = null): GameScene {
+    var scene = detectCurrentSceneInternal(byteBuffer)
+
+    // 1. 载入中：持续等待，最长 [LOADING_MAX_WAIT_MS]（常规约 15 秒即完成；版本更新时可能很久）。
+    //    只有超过上限仍停在载入页，才当作"卡死"转入未识别处理。
+    if (scene == GameScene.LOADING) {
+        val now = System.currentTimeMillis()
+        if (loadingSince == 0L) loadingSince = now
+        val waited = now - loadingSince
+        if (waited < LOADING_MAX_WAIT_MS) {
+            if (waited in LOADING_MIN_WAIT_MS until LOADING_MIN_WAIT_MS + 1_001) {
+                ShowMessage("载入时间较长（已等待 ${waited / 1000} 秒），继续等待载入完成…")
+            }
+            return GameScene.LOADING
+        }
+        loadingSince = 0L
+        scene = GameScene.UNKNOWN
+    } else {
+        loadingSince = 0L
+    }
+
+    // 2. 其他未识别：先等 [UNKNOWN_RETRY_DELAY_MS] 重新检测，共重复 [UNKNOWN_RETRY_TIMES] 次；
+    //    只有重试后仍识别不出，才真正"记入未识别"。
+    var attempt = 0
+    while (scene == GameScene.UNKNOWN && attempt < UNKNOWN_RETRY_TIMES) {
+        attempt++
+        delay(UNKNOWN_RETRY_DELAY_MS)
+        scene = detectCurrentSceneInternal(null)
+    }
+
+    if (scene != GameScene.UNKNOWN) return scene
+
+    // 3. 重试后仍未识别 → 记入未识别（截图 + 滑动窗口计数），并对认不出的弹窗按返回兜底。
+    noteUnrecognizedPage()
+    dismissUnknownOverlayWithBack()
+    return GameScene.UNKNOWN
+}
+
+private suspend fun detectCurrentSceneInternal(byteBuffer: ScreenCaptureManager.CaptureResult? = null): GameScene {
     var screen = byteBuffer
         ?: ScreenCaptureManager.capture(asBitmap = false) as? ScreenCaptureManager.CaptureResult
         ?: return GameScene.UNKNOWN
@@ -229,6 +273,10 @@ suspend fun detectCurrentScene(byteBuffer: ScreenCaptureManager.CaptureResult? =
         return GameScene.BATTLE
     }
 
+    // 3.2 已开战的战斗画面：主世界"结束战斗/放弃"、夜世界"退出对战"、搜索中的"取消搜索"。
+    //     截图证据：主世界"进攻中"的多张只命中 EndBattle，被旧逻辑判为未知页面并会误按返回键。
+    if (isInBattle(screen)) return GameScene.BATTLE
+
     // 3.5 Clan capital (都城): the bottom-left 回营 / 都城 entry button. It is asked only AFTER the
     //     village / training / battle questions, because the very same button also exists in a normal
     //     village (there the village markers above already answered, so it is never ambiguous here).
@@ -236,6 +284,12 @@ suspend fun detectCurrentScene(byteBuffer: ScreenCaptureManager.CaptureResult? =
     // 识别都城需要按 A 页重新采集特征；此处先保留，等新特征到位后替换。
     if (findMultiColors(byteBuffer = screen, schema = MyColors.ClanCapitalEntry, increment = 1) != null) {
         return GameScene.CLAN_CAPITAL
+    }
+
+    // 3.6 夜世界布局"编辑模式"：右侧一列亮绿色按钮。它属于夜世界场景，
+    //     旧逻辑识别不出会当未知页面（并在游戏里按返回），这里直接归为夜世界。
+    if (findMultiColors(byteBuffer = screen, schema = MyColors.BuilderBaseEditMode, increment = 1) != null) {
+        return GameScene.BUILDER_BASE
     }
 
     // 4. Still undecided: a popup covering the builder-icon row is the most likely cause, and it
@@ -261,21 +315,17 @@ suspend fun detectCurrentScene(byteBuffer: ScreenCaptureManager.CaptureResult? =
         return GameScene.MAIN_VILLAGE
     }
 
-    // 6. Nothing matched: most likely an overlay that sweepBlockingPopups() cannot recognize.
-    //    Press BACK once (rate-limited, never during a battle) and let the caller's next tick
-    //    re-detect, instead of spinning on an unparsable screen (same idea as the 11.17 fix in
-    //    searchOpponentsAndDeployTroops).
-    if (dismissUnknownOverlayWithBack()) {
-        delay(800)
-        return GameScene.UNKNOWN
+    // 5.5 游戏启动/载入的黑屏合规告示页（"健康游戏忠告" + SUPERCELL logo）：
+    //     这是"还没有任何游戏 UI"的合法中间态，识别为 LOADING 并让调用方继续等待。
+    //     这一步必须在第 6 步（按返回兜底）之前，否则在载入页按返回会弹出游戏的退出确认框。
+    //     注：搜索对手的"乌云"过渡界面颜色与夜世界夜空过近（实测互相误命中），不做特征识别，
+    //         由第 6 步的"未识别先等待"兜底覆盖即可。
+    if (findMultiColors(byteBuffer = screen, schema = MyColors.GameLoadingNotice, increment = 1) != null) {
+        return GameScene.LOADING
     }
 
-    // Phase: if the screen just became unrecognized (was a known scene on the previous tick),
-    // take a snapshot and feed the sliding-window guard. If "unrecognized" happens too many times
-    // in a short window, the script is stopped (see noteUnrecognizedPage).
-    if (SceneState.currentScene != GameScene.UNKNOWN) {
-        noteUnrecognizedPage()
-    }
+    // 6. 未识别：这里只返回 UNKNOWN。"先等 1.5 秒重试 2 次 → 仍未知才记入未识别（截图/计数）
+    //    并按返回兜底"统一交给外层 [detectCurrentScene] 处理，避免在过渡/动画帧上就截图或按返回。
     return GameScene.UNKNOWN
 }
 
@@ -304,6 +354,24 @@ private suspend fun isInBattle(screen: ScreenCaptureManager.CaptureResult): Bool
 private var lastUnknownOverlayBackAt = 0L
 private const val UNKNOWN_OVERLAY_BACK_INTERVAL_MS = 8_000L
 
+/** 首次识别到"载入中"的时间戳；载入结束或超过等待上限后清零。 */
+private var loadingSince = 0L
+
+/**
+ * 载入中（LOADING）的等待区间：常规约 15 秒即可完成载入，
+ * 但游戏版本更新/资源下载时可能很久，因此允许一直等到 [LOADING_MAX_WAIT_MS]（90 秒）；
+ * 只有超过该上限仍停在载入页，才当作"卡死"转入未识别处理。
+ */
+private const val LOADING_MIN_WAIT_MS = 15_000L
+private const val LOADING_MAX_WAIT_MS = 90_000L
+
+/**
+ * 非载入类的"未识别"处理：出现时先等 [UNKNOWN_RETRY_DELAY_MS] 重新检测，共重复
+ * [UNKNOWN_RETRY_TIMES] 次；只有重试后仍识别不出，才真正记入未识别（截图 + 计数 + 按返回兜底）。
+ */
+private const val UNKNOWN_RETRY_TIMES = 2
+private const val UNKNOWN_RETRY_DELAY_MS = 1_500L
+
 /**
  * Last-resort recovery for an overlay that [sweepBlockingPopups] cannot recognize (no red-X and no
  * common dialog) — e.g. the 选择英雄 dialog that deadlocked the training flow (see 11.17): press
@@ -321,6 +389,9 @@ private suspend fun dismissUnknownOverlayWithBack(): Boolean {
     val screen = ScreenCaptureManager.capture(asBitmap = false) as? ScreenCaptureManager.CaptureResult
         ?: return false
     if (isInBattle(screen)) return false
+
+    // 未识别已由 [detectCurrentScene] 做过"等 1.5 秒 ×2 重试"，这里直接按返回兜底
+    //（仅针对真正认不出的弹窗；战斗中不按，且做时间限流防止级联）。
     val now = System.currentTimeMillis()
     if (now - lastUnknownOverlayBackAt < UNKNOWN_OVERLAY_BACK_INTERVAL_MS) return false
     lastUnknownOverlayBackAt = now
