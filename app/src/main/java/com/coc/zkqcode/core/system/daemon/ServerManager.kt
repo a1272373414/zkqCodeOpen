@@ -26,10 +26,6 @@ object ServerManager {
             // Start the server in a detached session so it survives parent process termination
             Shell.cmd("setsid sh -c 'export CLASSPATH=${GlobalVars.serverPath}; exec app_process /system/bin com.coc.zkqserver.ShellServer' > /dev/null 2>&1 &")
                 .exec()
-            // Use nohup for enhanced fault tolerance
-            Shell.cmd("nohup sh -c 'export CLASSPATH=${GlobalVars.serverPath}; exec app_process /system/bin com.coc.zkqserver.ShellServer' > /dev/null 2>&1 &")
-                .exec()
-
 
             true
         } catch (e: Exception) {

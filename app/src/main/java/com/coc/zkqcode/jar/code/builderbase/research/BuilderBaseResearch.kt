@@ -17,19 +17,30 @@ import com.coc.zkqcode.jar.ui.schema.details.BuilderBaseTroops
 
 
 suspend fun builderBaseResearch(): Boolean {
+    ShowMessage.run("夜世界：开始研究兵种")
     if (getBooleanConfigRuntime(Schema.BUILDER_BASE_SETTINGS.BUILDER_BASE_RESEARCH.key) && WorkerAndResearch.detectResearch(BaseType.Builder)) {
+        ShowMessage.run("夜世界：已开启研究且检测到研究建筑，查找研究图标")
         val research = findMultiColors(schema = MyColors.ResearchIcon, increment = 1)
             ?: findMultiColors(schema = MyColors.ResearchIcon2, increment = 1)
         if (research != null) {
+            ShowMessage("夜世界：找到研究图标，进入研究页")
             TouchActions.tap(research.x, research.y, delayTime = 600)
             TouchActions.tap(research.x, research.y + 130)//Open research tab
             val backArrow = findMultiColorsUntil(schemas = listOf(MyColors.BuilderResearchBackArrow), duration = 1000, increment = 1)
             if (backArrow != null) {
+                ShowMessage("夜世界：研究页打开，开始检查可研究项")
                 TouchActions.tap(backArrow.x, backArrow.y, delayTime = 600)
                 builderBaseCheckAllResearch()
+            } else {
+                ShowMessage("夜世界：未找到研究返回箭头，跳过")
             }
+        } else {
+            ShowMessage("夜世界：未找到研究图标，跳过")
         }
+    } else {
+        ShowMessage("夜世界：未开启研究或无可研究建筑，跳过")
     }
+    ShowMessage.run("夜世界：研究流程完成")
     return enterMainScreen()
 }
 
@@ -37,6 +48,7 @@ suspend fun builderBaseCheckAllResearch() {
     for (i in BuilderBaseTroops.all.indices) {
         val troop = BuilderBaseTroops.all[i]
         if (getBooleanConfigRuntime(troop.key)) {
+            ShowMessage.run("夜世界：检查兵种 ${troop.displayName}")
             val row = i / 6
             val col = i % 6
 
@@ -56,11 +68,12 @@ suspend fun builderBaseCheckAllResearch() {
                     clickRightBottom(2)
                     return
                 } else {
-                    ShowMessage("账号${InGamesVars.currentAccountNumber}，${troop.displayName} 资源不足")
+                    ShowMessage.run("账号${InGamesVars.currentAccountNumber}，${troop.displayName} 资源不足")
                 }
             }
         }
     }
+    ShowMessage("夜世界：可研究项检查完毕")
 }
 
 

@@ -2,6 +2,7 @@ package com.coc.zkqcode.jar.code.builderbase.upgrade
 
 import android.graphics.Point
 import com.coc.zkqcode.core.system.screencapture.ScreenCaptureManager
+import com.coc.zkqcode.core.util.basic.ShowMessage
 import com.coc.zkqcode.core.util.basic.delayWithMultiplier
 import com.coc.zkqcode.core.util.fileactions.LogHelper.logAndRestart
 import com.coc.zkqcode.jar.code.colorschema.MyColors
@@ -9,6 +10,7 @@ import com.coc.zkqcode.jar.code.universal.buildings.upgrade.BuildButtonType
 import com.coc.zkqcode.jar.code.universal.colors.findMultiColors
 
 suspend fun builderBaseFindBuildButton(duration: Int = 500, type: BuildButtonType): Point? {
+    ShowMessage.run("夜世界：开始查找建造按钮 type=$type")
     val startTime = System.currentTimeMillis()
     val targetSchemas = when (type) {
         BuildButtonType.Tick -> listOf(
@@ -29,10 +31,11 @@ suspend fun builderBaseFindBuildButton(duration: Int = 500, type: BuildButtonTyp
         val screenBuffer = ScreenCaptureManager.capture(asBitmap = false) as? ScreenCaptureManager.CaptureResult ?: logAndRestart("failed to take screenshot at close advertisement")
         for (schema in targetSchemas) {
             val point = findMultiColors(schema = schema, byteBuffer = screenBuffer)
-            if (point != null) return point
+            if (point != null) return point.also { ShowMessage.run("夜世界：找到建造按钮 (${it.x},${it.y}) type=$type") }
         }
         delayWithMultiplier(20)
     }
+    ShowMessage("夜世界：未在 ${duration}ms 内找到建造按钮 type=$type")
     return null
 }
 

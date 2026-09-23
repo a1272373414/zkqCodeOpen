@@ -18,11 +18,17 @@ object LogHelper {
     // Re-entry guard to prevent recursive calls (e.g. ShowMessage -> logAndRestart -> ShowMessage)
     private val isRestarting = AtomicBoolean(false)
 
+    // 每个日志文件保留的最大行数（滚动覆盖，仅保留最近 N 行）
+    private const val MAX_LOG_LINES = 200
+
     fun initTimber(context: Context) {
         if (BuildConfig.DEBUG) {
+            // 测试版：logcat + 文件全量(含详细 VERBOSE)，便于排查细节
             Timber.plant(Timber.DebugTree())
+            Timber.plant(FileLoggingTree(context, Log.VERBOSE))
         } else {
-            Timber.plant(FileLoggingTree(context))
+            // 正式版：仅记录运行日志(>=INFO)与异常(WARN/ERROR)，不记录详细排错日志，避免文件过大
+            Timber.plant(FileLoggingTree(context, Log.INFO))
         }
     }
 
@@ -52,9 +58,12 @@ object LogHelper {
         Timber.tag("zkq_debug").d("Debug info: $message")
     }
 
-    class FileLoggingTree(private val context: Context) : Timber.Tree() {
+    class FileLoggingTree(private val context: Context, private val minPriority: Int = Log.VERBOSE) : Timber.Tree() {
         @SuppressLint("LogNotTimber")
         override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
+            // 低于最低记录级别的日志直接丢弃（正式版借此过滤详细排错日志）
+            if (priority < minPriority) return
+
             val logDir = File(context.filesDir, "logs")
             if (!logDir.exists()) logDir.mkdirs()
 
@@ -70,11 +79,11 @@ object LogHelper {
                     fos.write(logEntry.toByteArray())
                 }
 
-                // Maintain 100 lines limit for each file
+                // Maintain MAX_LOG_LINES limit for each file (only keep the most recent N lines)
                 synchronized(this) {
                     val lines = logFile.readLines()
-                    if (lines.size > 100) {
-                        val trimmedLines = lines.takeLast(100)
+                    if (lines.size > MAX_LOG_LINES) {
+                        val trimmedLines = lines.takeLast(MAX_LOG_LINES)
                         logFile.writeText(trimmedLines.joinToString("\n") + "\n")
                     }
                 }

@@ -1,5 +1,6 @@
 package com.coc.zkqcode.jar.code.builderbase.resources
 
+import com.coc.zkqcode.core.util.basic.ShowMessage
 import com.coc.zkqcode.core.util.basic.delayWithMultiplier
 import com.coc.zkqcode.jar.code.universal.colors.findMultiColors
 import com.coc.zkqcode.core.util.touchactions.TouchActions
@@ -10,6 +11,7 @@ import com.coc.zkqcode.jar.code.universal.colors.findMultiColorsUntil
 import com.coc.zkqcode.jar.code.universal.enterMainScreen
 
 suspend fun collectBuilderBaseResources(): Boolean {
+    ShowMessage.run("夜世界：开始收集资源")
     zoomSmallBuilderBase()
     TouchActions.swipe(587, 420, 587, 700, delayTime = 100)
     goldMineAndElixirCollector()
@@ -22,16 +24,19 @@ suspend fun collectBuilderBaseResources(): Boolean {
             TouchActions.tap(tx, ty, isJitter = false)
             val collectButton = findMultiColorsUntil(schemas = listOf(MyColors.CannotCollectExilerCart, MyColors.CollectExilerCart), duration = 200)
             if (collectButton != null) {
+                ShowMessage.run("夜世界：发现资源车，收取中")
                 TouchActions.tap(collectButton.x, collectButton.y)
                 clickRightBottom(1)
                 break@outerLoop
             }
         }
     }
+    ShowMessage("夜世界：资源收集完成")
     return enterMainScreen()
 }
 
 private suspend fun goldMineAndElixirCollector() {
+    ShowMessage("夜世界：收集金矿与圣水收集器")
     repeat(3) {
         // Define the resource schemas to iterate through in each cycle
         val resourceSchemas = listOf(

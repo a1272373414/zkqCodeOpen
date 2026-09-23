@@ -17,6 +17,7 @@ import com.coc.zkqcode.jar.code.universal.clickRightBottom
 import com.coc.zkqcode.jar.code.universal.colors.findMultiColors
 import com.coc.zkqcode.jar.code.universal.colors.findMultiColorsUntil
 import com.coc.zkqcode.jar.code.universal.deploy.DeployGeometry
+import com.coc.zkqcode.jar.code.universal.deploy.DeploySide
 import com.coc.zkqcode.jar.code.universal.deploy.DeployType
 import com.coc.zkqcode.jar.code.universal.enterMainScreen
 import com.coc.zkqcode.jar.code.universal.smalltools.StorageKeys
@@ -31,7 +32,10 @@ import com.coc.zkqcode.jar.ui.schema.Schema
 import kotlin.random.Random
 
 // Shared helper to prepend account number to all log messages
-private fun accountLog(msg: String) = ShowMessage("账号${InGamesVars.currentAccountNumber}，$msg")
+private fun accountLog(msg: String) = ShowMessage.run("账号${InGamesVars.currentAccountNumber}，$msg")
+
+// T16：记录夜飞机(空中机器)卡槽位置，供 realAttack 循环释放技能（每局 normalBattle 重置）
+private var battleCopterSlot: Point? = null
 
 // Elevated from local nested function to private top-level for reusability
 private suspend fun tapRepeat(x: Int, y: Int, times: Int = 12) {
@@ -41,6 +45,7 @@ private suspend fun tapRepeat(x: Int, y: Int, times: Int = 12) {
 }
 
 suspend fun builderBaseAttack(): Boolean {
+    accountLog("开始夜世界对战流程")
     // 1. Check if Builder Base farming is enabled
     val isEnabled = getBooleanConfigRuntime(Schema.BUILDER_BASE_SETTINGS.BUILDER_BASE_FARMING.key)
     if (!isEnabled) {
@@ -158,6 +163,21 @@ private suspend fun realAttack(mode: String, battleNumber: Int = 1, battleTimes:
         if (machineSkills != null) {
             TouchActions.tap(machineSkills.x, machineSkills.y + 100, delayTime = 200)
         }
+        // T16：夜飞机（空中机器）技能自动释放（源 战斗监控 16652~16670）。
+        // 夜飞机技能就绪时卡槽旁出现粉光(FFB2FF/FE3AC7)，按卡槽位置 rescope 检测后点槽释放。
+        if (battleCopterSlot != null) {
+            val slot = battleCopterSlot!!
+            val copterSkill = findMultiColors(
+                byteBuffer = capturedScreen,
+                schema = ColorSchema.rescope(MyColors.BattleCopterSkills, slot.x - 70, 555, slot.x + 40, 575, 0)
+            ) ?: findMultiColors(
+                byteBuffer = capturedScreen,
+                schema = ColorSchema.rescope(MyColors.BattleCopterSkillsAlt, slot.x - 70, 555, slot.x + 40, 575, 0)
+            )
+            if (copterSkill != null) {
+                TouchActions.tap(slot.x, slot.y, delayTime = 200)
+            }
+        }
         delayWithMultiplier(1000)
     }
     if (!enterMainScreen()) return false
@@ -195,58 +215,89 @@ private suspend fun normalBattle(isNormal: Boolean = true) {
         accountLog("未找到战争机器特征，退回固定坐标 (125,610)")
         TouchActions.tap(125, 610, delayTime = 200)
     }
-    TouchActions.tap(deployPos.x, deployPos.y, delayTime = 200) // Deploy the Machine
-    if (!isNormal) return
-    val generalTroops = findMultiColorsUntil(schemas = listOf(MyColors.TroopsWithSkills, MyColors.TroopsWithOutSkills), duration = 200)
-    if (generalTroops != null) {
-        ShowMessage("准备点击女巫，点击坐标${generalTroops.x + 1}, 610\n当前部署位置${deployPos.x}, ${deployPos.y}")
-        delayWithMultiplier(1500)
-        TouchActions.tap(generalTroops.x + 15, 620, delayTime = 200) // Troops
-        val nightWitch = findMultiColors(schema = MyColors.NightWitch)
-        if (nightWitch != null) {
-            TouchActions.touchDown((deployPos.x + Random.nextInt(1, 4)).toFloat(), (deployPos.y + Random.nextInt(1, 4)).toFloat(), 1)
-            delayWithMultiplier(4000)
-            TouchActions.touchUp(1)
-            accountLog("等女巫走一会")
-            delayWithMultiplier(Random.nextInt(5000, 10000))
-            repeat(6) {
-                val skillsPos = findMultiColors(
-                    schema = ColorSchema.rescope(
-                        MyColors.TroopSkills, MyColors.TroopSkills.x1, MyColors.TroopSkills.y1, MyColors.TroopSkills.x2, MyColors.TroopSkills.y2, direction = Random.nextInt(0, 2)
-                    )
-                )
-                if (skillsPos != null) {
-                    TouchActions.tap(skillsPos.x, 620)
-                    delayWithMultiplier(Random.nextInt(500, 4000))
-                }
-            }
-        } else {
-            attemptLoop@ for (attempt in 0 until 5) {
-                // Step 1: Touch down at the chosen quadrant point
-                var currentPos = deployPos
-                TouchActions.touchDown(deployPos.x.toFloat(), deployPos.y.toFloat(), 1)
-                delayWithMultiplier(600)
+    TouchActions.tap(deployPos.x, deployPos.y, delayTime = 200) // 战争机器落点
 
-                // Steps 2-3: Move smoothly along the quadrant line until the barbarian is gone
-                var moveCount = 0
-                while (true) {
-                    val nextPos = DeployGeometry.spreadTap(side, Random.nextInt(0, 4), 4, DeployType.TROOP)
-                    TouchActions.moveSmoothly(
-                        fromX = currentPos.x.toFloat(), fromY = currentPos.y.toFloat(), toX = nextPos.x.toFloat(), toY = nextPos.y.toFloat(), duration = Random.nextInt(200, 500)
-                    )
-                    currentPos = nextPos
-                    moveCount++
-                    // Only check barbarian presence every 3 moves to reduce findMultiColors calls
-                    if (moveCount % 3 == 0) {
-                        val barbarian = findMultiColors(schema = MyColors.BuilderBaseBarbarian)
-                        if (barbarian == null) {
-                            // Release finger and exit outer loop — barbarian is gone
-                            TouchActions.touchUp(1)
-                            break@attemptLoop
-                        }
+    // T14：夜飞机（空中机器）英雄部署。源 `函数323a` 先放夜世界王再放夜飞机，均落向所选方向中间点。
+    battleCopterSlot = null
+    val copter = findMultiColors(schema = MyColors.BuilderBaseBattleCopter)
+    if (copter != null) {
+        TouchActions.tap(copter.x, copter.y, delayTime = 200)
+        TouchActions.tap(deployPos.x, deployPos.y, delayTime = 200) // 夜飞机落点
+        battleCopterSlot = Point(copter.x, copter.y) // T16：记录卡槽位置供技能释放
+    } else {
+        accountLog("未找到夜飞机特征，跳过（本账号可能未解锁战斗直升机）")
+    }
+    if (!isNormal) return
+    deployAllTroops(side, deployPos)
+}
+
+/**
+ * T15：夜世界多兵种识别与批量下兵（源 `函数123a` 行 15997~16071）。
+ * 先放夜巫（保留技能循环）、再放野蛮（保留铺线滑动），最后遍历其余兵种卡槽，
+ * 识别到点槽即逐一点下放空（与源 `函数323a` 对每个兵种点槽+落点的口径一致）。
+ */
+private suspend fun deployAllTroops(side: DeploySide, deployPos: Point) {
+    // 夜巫：保留技能循环（源 函数323a 对女巫用外围点，这里沿用既有实现）
+    val nightWitch = findMultiColors(schema = MyColors.NightWitch)
+    if (nightWitch != null) {
+        ShowMessage("准备点击女巫，点击坐标${nightWitch.x + 1}, 620\n当前部署位置${deployPos.x}, ${deployPos.y}")
+        delayWithMultiplier(1500)
+        TouchActions.tap(nightWitch.x + 15, 620, delayTime = 200)
+        TouchActions.touchDown((deployPos.x + Random.nextInt(1, 4)).toFloat(), (deployPos.y + Random.nextInt(1, 4)).toFloat(), 1)
+        delayWithMultiplier(4000)
+        TouchActions.touchUp(1)
+        accountLog("等女巫走一会")
+        delayWithMultiplier(Random.nextInt(5000, 10000))
+        repeat(6) {
+            val skillsPos = findMultiColors(
+                schema = ColorSchema.rescope(
+                    MyColors.TroopSkills, MyColors.TroopSkills.x1, MyColors.TroopSkills.y1, MyColors.TroopSkills.x2, MyColors.TroopSkills.y2, direction = Random.nextInt(0, 2)
+                )
+            )
+            if (skillsPos != null) {
+                TouchActions.tap(skillsPos.x, 620)
+                delayWithMultiplier(Random.nextInt(500, 4000))
+            }
+        }
+    }
+    // 野蛮：保留铺线滑动（源 函数323a 普通兵种用中间点 + 滑动）
+    val barbarian = findMultiColors(schema = MyColors.BuilderBaseBarbarian)
+    if (barbarian != null) {
+        attemptLoop@ for (attempt in 0 until 5) {
+            var currentPos = deployPos
+            TouchActions.touchDown(deployPos.x.toFloat(), deployPos.y.toFloat(), 1)
+            delayWithMultiplier(600)
+            var moveCount = 0
+            while (true) {
+                val nextPos = DeployGeometry.spreadTap(side, Random.nextInt(0, 4), 4, DeployType.TROOP)
+                TouchActions.moveSmoothly(
+                    fromX = currentPos.x.toFloat(), fromY = currentPos.y.toFloat(), toX = nextPos.x.toFloat(), toY = nextPos.y.toFloat(), duration = Random.nextInt(200, 500)
+                )
+                currentPos = nextPos
+                moveCount++
+                if (moveCount % 3 == 0) {
+                    val b = findMultiColors(schema = MyColors.BuilderBaseBarbarian)
+                    if (b == null) {
+                        TouchActions.touchUp(1)
+                        break@attemptLoop
                     }
                 }
             }
+        }
+    }
+    // 其余兵种（皮卡/巨人/弓箭/炮车/炸弹/野猪/气球/龙宝/亡灵/法师）：识别到点槽即逐一点下放空
+    val genericTroops = listOf(
+        MyColors.BuilderBasePekka, MyColors.BuilderBaseGiant, MyColors.BuilderBaseGiantAlt,
+        MyColors.BuilderBaseArcher, MyColors.BuilderBaseCannonCart, MyColors.BuilderBaseBomber,
+        MyColors.BuilderBaseHog, MyColors.BuilderBaseBalloon, MyColors.BuilderBaseBabyDragon,
+        MyColors.BuilderBaseBabyDragonAlt, MyColors.BuilderBaseMinion, MyColors.BuilderBaseWizard
+    )
+    for (schema in genericTroops) {
+        var guard = 0
+        while (guard++ < 16) {
+            val slot = findMultiColors(schema = schema) ?: break
+            TouchActions.tap(slot.x, slot.y, delayTime = 150)
+            TouchActions.tap(deployPos.x, deployPos.y, delayTime = 200)
         }
     }
 }
@@ -308,14 +359,17 @@ private suspend fun builderBaseTrainTroops() {
 }
 
 suspend fun builderBaseTrainWithConditions(): Boolean {
+    accountLog("开始练兵检测")
     val storageKey = StorageKeys.withAccountNumber(StorageKeys.BUILDER_BASE_TRAIN_TROOPS, InGamesVars.currentAccountNumber)
 
     if (checkMemoryFile(storageKey, 1440)) {
+        accountLog("24小时内未练兵，开始练兵")
         builderBaseTrainTroops()
         writeMemory(storageKey, (System.currentTimeMillis() / 60_000).toString())
         return enterMainScreen()
     }
 
     // Training was already completed within 24 hours
+    accountLog("24小时内已练兵，跳过")
     return true
 }

@@ -12,6 +12,7 @@ import com.coc.zkqcode.jar.code.universal.colors.findMultiColorsUntil
 
 suspend fun enterEditMode() {
     // Select the initial schema based on the game package version
+    ShowMessage("清障：进入编辑模式")
     val initialSchema = if (InGamesVars.currentGameVersion == GameVersion.CN) {
         MyColors.CNEditBaseButton
     } else {
@@ -21,6 +22,7 @@ suspend fun enterEditMode() {
     // Attempt to locate the initial edit button
     findMultiColorsUntil(schemas = listOf(initialSchema), duration = 1500)?.let {
         TouchActions.tap(it.x, it.y)
+        ShowMessage("清障：已点击编辑按钮")
     } ?: return
 
     // Sequence of interactions to navigate through the edit menus
@@ -30,15 +32,18 @@ suspend fun enterEditMode() {
     }
 
     removeAllBuildings()
+    ShowMessage("清障：编辑模式已进入，建筑已移出")
 }
 
 suspend fun removeAllBuildings() {
+    ShowMessage("清障：开始移除全部建筑")
     findMultiColorsUntil(schemas = listOf(MyColors.MiddleGreenYes, MyColors.MiddleGreenConfirm), duration = 300)?.let { yesPoint ->
         TouchActions.tap(yesPoint.x, yesPoint.y)
     }
     // Locate "Remove All", confirm the action, and perform final layout taps
     findMultiColorsUntil(schemas = listOf(MyColors.EditModeRemoveAll, MyColors.EditModeRemoveAll2), duration = 1000)?.let {
         TouchActions.tap(it.x, it.y)
+        ShowMessage("清障：已点击移除全部")
 
         // Re-confirm deletion
         findMultiColorsUntil(schemas = listOf(MyColors.MiddleGreenYes), duration = 200)?.let { yesPoint ->
@@ -54,9 +59,13 @@ suspend fun removeAllBuildings() {
 
 suspend fun removeObstacles() {
     delayWithMultiplier(200)
+    ShowMessage("清障：开始检测障碍物（YOLO remove-obstacle）")
     val obstacles = tiledYoloDetect(
         modelName = "remove-obstacle", callerTag = "BuilderBaseRemoveObstacles"
     )
+    if (obstacles.isEmpty()) {
+        ShowMessage("清障：未检测到障碍物（模型未加载或本屏无可移除障碍）")
+    }
     obstacles.forEach { obstacle ->
         val box = obstacle.boundingBox
         val centerX = box.centerX().toInt()
