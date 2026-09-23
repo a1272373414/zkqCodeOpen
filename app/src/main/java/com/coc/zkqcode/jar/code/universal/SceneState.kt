@@ -11,6 +11,7 @@ import com.coc.zkqcode.core.util.touchactions.TouchActions
 import com.coc.zkqcode.jar.code.colorschema.ColorSchema
 import com.coc.zkqcode.jar.code.colorschema.MyColors
 import com.coc.zkqcode.jar.code.universal.InGamesVars
+import com.coc.zkqcode.jar.code.universal.colors.TemplateMatcher
 import com.coc.zkqcode.jar.code.universal.colors.findMultiColors
 import com.coc.zkqcode.jar.code.universal.smalltools.detectStuckNetworkSpinner
 import com.coc.zkqcode.jar.code.universal.smalltools.isGameAtFront
@@ -324,6 +325,14 @@ private suspend fun detectCurrentSceneInternal(byteBuffer: ScreenCaptureManager.
         return GameScene.LOADING
     }
 
+    // 6.5 模板兜底（T02 接线）：以上特征都认不出时，尝试已登记的 NCC 模板规则
+    //     （模板匹配对"颜色会变/被遮挡"的按钮更稳；规则默认留空，不产生额外开销）。
+    for (rule in TEMPLATE_RULES) {
+        if (TemplateMatcher.find(rule.name, rule.x1, rule.y1, rule.x2, rule.y2, rule.threshold) != null) {
+            return rule.scene
+        }
+    }
+
     // 6. 未识别：这里只返回 UNKNOWN。"先等 1.5 秒重试 2 次 → 仍未知才记入未识别（截图/计数）
     //    并按返回兜底"统一交给外层 [detectCurrentScene] 处理，避免在过渡/动画帧上就截图或按返回。
     return GameScene.UNKNOWN
@@ -349,6 +358,31 @@ private suspend fun isInBattle(screen: ScreenCaptureManager.CaptureResult): Bool
         findMultiColors(byteBuffer = screen, schema = MyColors.GiveUpButton, increment = 1) != null ||
         findMultiColors(byteBuffer = screen, schema = MyColors.ExitBattleButton, increment = 1) != null ||
         findMultiColors(byteBuffer = screen, schema = MyColors.CancelAttackSearch, increment = 1) != null
+
+/**
+ * NCC 模板兜底规则（task.md T02 接线）：[name] 对应 `assets/templates/<name>.png`，
+ * 由 `tools/make_template.py` 裁剪生成。命中 [x1,y1,x2,y2] 区域内的模板即认为处于 [scene]。
+ *
+ * 默认**留空**（避免每帧产生 NCC 开销）；需要时按下面示例登记：
+ * ```
+ * private val TEMPLATE_RULES = listOf(
+ *     TemplateRule("btn_bb_edit", GameScene.BUILDER_BASE, 1050, 38, 1245, 78),
+ * )
+ * ```
+ */
+private data class TemplateRule(
+    val name: String,
+    val scene: GameScene,
+    val x1: Int,
+    val y1: Int,
+    val x2: Int,
+    val y2: Int,
+    // 区域要**贴紧按钮所在的小范围**：NCC 成本 ≈ 窗口数 × 模板像素，区域越大越慢。
+    // 阈值 0.75 是实测值（精确模板正样本 score≈1.0，能压掉 0.7~0.72 的近似误命中）。
+    val threshold: Double = 0.75
+)
+
+private val TEMPLATE_RULES = listOf<TemplateRule>()
 
 /** Timestamp of the last "unknown overlay" BACK press, so the fallback cannot cascade. */
 private var lastUnknownOverlayBackAt = 0L

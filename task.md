@@ -30,8 +30,9 @@
 | ID | 任务 | 目标文件(当前项目) | 工作量 | 优先级 | 源依据 | 状态 | 备注 |
 |---|---|---|---|---|---|---|---|
 | T01 | 坐标归一化集成 pass | `app/.../zkqcode/jar` CoordNormalizer 集成 | 1天 | 低 | 源 r()/b() | ⬜ | 把散落硬编码字面量替换为归一化调用 |
-| T02 | NCC 接入 OCR pipeline | `NccMatcher.kt` 接线 | 1天 | 低 | 源 ncc.c | ⬜ | 当前已实现未接线，作为 PixelFontOcr 兜底 |
+| T02 | NCC 接入 OCR pipeline | `NccMatcher.kt` 接线 | 1天 | 低 | 源 ncc.c | 🔄 | 已接线为**模板匹配**：`TemplateMatcher`(assets/templates + 区域 NCC，阈值 0.75) + `SceneState` 模板兜底钩子 `TEMPLATE_RULES`，配套 `tools/make_template.py`；OCR pipeline 兜底仍未接；离线自检 0 误命中，待真机验证 |
 | T03 | 特征带方向搜索 | `FindMultiColors.kt` / Rust | 1天 | 低 | 源 函数24a/26a | ⬜ | 评估是否给找色增加方向参数提升滑动场景鲁棒性 |
+| T19 | 特征标定工具链（自动生成 + 模板裁剪） | `tools/make_feature.py` / `tools/make_template.py` | 1天 | 中 | 实机痛点：文字按钮需逐点量色 | 🔄 | `make_feature.py`：给截图+矩形自动生成 `ColorSchema`(主色众数 + 跨样本稳定偏移点) + 正/负样本自检；`make_template.py`：裁剪模板到 `assets/templates` 并做同口径 NCC 自检（可限区域/阈值）。已离线验证（编辑模式：15 张负样本 0 误命中），待实机使用验证 |
 
 ### P1 — 明确缺失，直接抄（高优先）
 
@@ -83,10 +84,10 @@
 
 ## 四、进度汇总
 
-- 总任务数：18（T01–T18）
+- 总任务数：19（T01–T19）
 - ✅ 已完成：0
-- 🔄 进行中：5（T14,T15,T16,T17,T18）
-- ⬜ 待办：12（T01–T05,T07–T13）
+- 🔄 进行中：7（T02,T14,T15,T16,T17,T18,T19）
+- ⬜ 待办：11（T01,T03–T05,T07–T13）
 - ⏸ 暂停：1（T06 延后）
 - ❌ 不抄/取消：2（村庄改名、部落靓标签，见决策记录）
 
@@ -109,3 +110,5 @@
 | 2026-09-23 | T18 | 新建 | 日志分级与落盘：`ShowMessage` 恢复旧 `invoke` 入口(保持旧 jar/预编译代码二进制兼容，修复改签名引起的 NoSuchMethodError 崩溃)并新增 `run/warn/error/log`；`LogHelper` 按 DEBUG(全量)/RELEASE(仅 INFO+) 分级落文件、缓冲 100→200；夜世界流程日志改 `ShowMessage.run()` |
 | 2026-09-23 | T17 | 新建+实现 | 依据 15 张实机未识别 debug 截图（用户标注）：新增 `GameScene.LOADING` 与特征 `GameLoadingNotice`(合规黑屏)/`BuilderBaseEditMode`(夜世界编辑模式)；战斗中(`EndBattle`/`GiveUpButton`/`ExitBattleButton`/`CancelAttackSearch`)归 `BATTLE`；未识别先等 1.5s×2 重试、载入等待 15–90s；移除会与夜世界夜空互相误命中的"乌云"特征；修复载入页按返回触发游戏退出确认弹窗的问题 |
 | 2026-09-23 | T17 | 参数 | 载入等待上限 90s（常规 15s 即完成，版本更新时长载入由上限兜底）；非载入类未识别重试 2×1.5s 后才记入未识别 |
+| 2026-09-23 | T02 | 实现 | `NccMatcher` 接线：新增 `TemplateMatcher`（assets 模板加载+缓存、区域查询，阈值 0.75）；`SceneState` 新增模板兜底钩子 `TEMPLATE_RULES`（默认空，仅在未识别时兜底）。实测「整图搜索误命中 9/16 → 限区域 3/16 → 阈值 0.75 后 0/16」 |
+| 2026-09-23 | T19 | 新建+实现 | 新增特征标定工具链：`tools/make_feature.py`（截图+矩形 → 自动生成 `ColorSchema`，含正/负样本自检）、`tools/make_template.py`（裁剪模板到 `assets/templates` + 同口径 NCC 自检，支持 `--verify-region`/`--threshold`）；示例模板 `btn_bb_edit.png` |
