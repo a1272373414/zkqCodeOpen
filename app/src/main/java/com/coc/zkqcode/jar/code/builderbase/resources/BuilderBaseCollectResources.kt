@@ -13,9 +13,12 @@ import com.coc.zkqcode.jar.code.universal.enterMainScreen
 suspend fun collectBuilderBaseResources(): Boolean {
     ShowMessage.run("夜世界：开始收集资源")
     zoomSmallBuilderBase()
+    // 注意：swipe 是"按下 → 停顿 (delayTime×0.7×倍率) → 移动"，起点 (587,420) 压在村庄城墙上，
+    // 若停顿过久（默认 300~400ms）会被游戏判定为"长按拖动建筑"（实机表现为误拖城墙）。
+    // 两次都显式给很小的 delayTime，使按下后几乎立即移动。
     TouchActions.swipe(587, 420, 587, 700, delayTime = 100)
     goldMineAndElixirCollector()
-    TouchActions.swipe(587, 420, 587, 700)
+    TouchActions.swipe(587, 420, 587, 700, delayTime = 100)
     delayWithMultiplier(100)
     goldMineAndElixirCollector()
     // Use a label so we can break out of both loops when a cart is found

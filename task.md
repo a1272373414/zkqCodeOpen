@@ -112,4 +112,5 @@
 | 2026-09-23 | T17 | 参数 | 载入等待上限 90s（常规 15s 即完成，版本更新时长载入由上限兜底）；非载入类未识别重试 2×1.5s 后才记入未识别 |
 | 2026-09-23 | T02 | 实现 | `NccMatcher` 接线：新增 `TemplateMatcher`（assets 模板加载+缓存、区域查询，阈值 0.75）；`SceneState` 新增模板兜底钩子 `TEMPLATE_RULES`（默认空，仅在未识别时兜底）。实测「整图搜索误命中 9/16 → 限区域 3/16 → 阈值 0.75 后 0/16」 |
 | 2026-09-23 | T19 | 新建+实现 | 新增特征标定工具链：`tools/make_feature.py`（截图+矩形 → 自动生成 `ColorSchema`，含正/负样本自检）、`tools/make_template.py`（裁剪模板到 `assets/templates` + 同口径 NCC 自检，支持 `--verify-region`/`--threshold`）；示例模板 `btn_bb_edit.png` |
+| 2026-09-23 | T15 | 修复 | 进入夜世界后"收集资源"误拖动建筑：`collectBuilderBaseResources()` 两次下滑起点 (587,420) 压在城墙上，且第二次未传 `delayTime`（`TouchActions.swipe` 按下后停顿 300~400ms×倍率）被游戏判定为"长按拖动建筑"→ 误拖城墙；已改为两次都传 `delayTime = 100` |
 | 2026-09-23 | T16 | 修复 | 战争机器技能判据改为"英雄卡槽顶部**充能条第 1 格亮起**"（用户实机确认的机制）：新增 `HeroChargeReady` 特征（位置 (95,560)-(112,565)、亮色 RGB C022FB），由 `tools/make_feature.py` 从实机截图 `I:\coc\游戏截图\夜世界-英雄充能\进度0~3` 自动生成并自检（进度 1/2/3 命中、进度 0 不命中）；`realAttack` 命中即点英雄卡槽释放，不再依赖粉光与 `machineSlot`；`make_feature.py` 负样本自检支持 jpg/jpeg |
