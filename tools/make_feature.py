@@ -189,7 +189,10 @@ def main():
     # 负样本自检
     if args.neg_dir:
         print("\n=== 负样本自检（命中即为误判）")
-        neg_files = sorted(glob.glob(os.path.join(args.neg_dir, "**", "*.png"), recursive=True))
+        neg_files = []
+        for ext in ("*.png", "*.jpg", "*.jpeg"):
+            neg_files += glob.glob(os.path.join(args.neg_dir, "**", ext), recursive=True)
+        neg_files = sorted(set(neg_files))
         pos_set = {os.path.abspath(p) for p, _ in positives}
         checked = 0
         bad = 0

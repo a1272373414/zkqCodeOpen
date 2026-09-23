@@ -37,10 +37,6 @@ private fun accountLog(msg: String) = ShowMessage.run("账号${InGamesVars.curre
 // T16：记录夜飞机(空中机器)卡槽位置，供 realAttack 循环释放技能（每局 normalBattle 重置）
 private var battleCopterSlot: Point? = null
 
-// T16：记录战争机器(夜世界王)卡槽位置。英雄技能就绪(粉光)时应点击"英雄卡槽"本身释放技能，
-// 原实现点 (x, y+100) 会落到卡槽之外，导致英雄技能一直放不出来。
-private var machineSlot: Point? = null
-
 /**
  * 夜世界候选下兵点：对四象限部署线各取样若干点（[DeployGeometry.spreadTap]），
  * 覆盖"线内侧(可能落在基地建筑区)→线外侧(基地外围草地区)"的整条范围。
@@ -178,14 +174,15 @@ private suspend fun realAttack(mode: String, battleNumber: Int = 1, battleTimes:
             continue
         }
 
-        val machineSkills = findMultiColors(byteBuffer = capturedScreen, schema = MyColors.MachineSkills)
-
-        // T16：战争机器技能就绪（粉光）时，点英雄卡槽本身释放技能（与夜飞机口径一致）。
-        // 原实现点 (machineSkills.x, machineSkills.y + 100) 偏移过大落到卡槽之外，技能一直没放出。
-        if (machineSkills != null && machineSlot != null) {
-            val slot = machineSlot!!
-            accountLog("释放战争机器技能 @(${slot.x},${slot.y})")
-            TouchActions.tap(slot.x, slot.y, delayTime = 200)
+        // T16：战争机器技能 —— 判据为"英雄卡槽顶部充能条第 1 格亮起"（用户实机确认的机制）。
+        // 充能格位置固定，命中即技能可释放；点击英雄卡槽（用 BuilderBaseMachine 定位，失败退回固定点）。
+        val chargeReady = findMultiColors(byteBuffer = capturedScreen, schema = MyColors.HeroChargeReady)
+        if (chargeReady != null) {
+            val slot = findMultiColors(byteBuffer = capturedScreen, schema = MyColors.BuilderBaseMachine)
+            val tx = slot?.x ?: 106
+            val ty = slot?.y ?: 634
+            accountLog("战争机器充能就绪，点击卡槽释放技能 @($tx,$ty)")
+            TouchActions.tap(tx, ty, delayTime = 200)
         }
         // T16：夜飞机（空中机器）技能自动释放（源 战斗监控 16652~16670）。
         // 夜飞机技能就绪时卡槽旁出现粉光(FFB2FF/FE3AC7)，按卡槽位置 rescope 检测后点槽释放。
@@ -233,11 +230,9 @@ private suspend fun normalBattle(isNormal: Boolean = true) {
     val deployPoints = buildDeployPoints()
 
     // 战争机器：优先用色特征精确定位机器卡（旧代码写死 tap(125,610)），找不到再退回旧坐标。
-    machineSlot = null
     val machine = findMultiColors(schema = MyColors.BuilderBaseMachine)
     if (machine != null) {
         TouchActions.tap(machine.x, machine.y, delayTime = 200)
-        machineSlot = Point(machine.x, machine.y) // T16：记录卡槽位置供技能释放
     } else {
         accountLog("未找到战争机器特征，退回固定坐标 (125,610)")
         TouchActions.tap(125, 610, delayTime = 200)

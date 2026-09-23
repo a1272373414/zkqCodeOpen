@@ -14,6 +14,8 @@ interface IBuilderBaseAttackColors {
     val NightWitch: ColorSchema
     val TroopSkills: ColorSchema
     val MachineSkills: ColorSchema
+    /** 战争机器技能就绪：英雄卡槽顶部充能条第 1 格亮起。 */
+    val HeroChargeReady: ColorSchema
     val BattleCopterSkills: ColorSchema
     val BattleCopterSkillsAlt: ColorSchema
     val BuilderBaseBarbarian: ColorSchema
@@ -62,6 +64,15 @@ object BuilderBaseAttackColors : IBuilderBaseAttackColors {
     )
     override val MachineSkills = ColorSchema.parse(
         139, 553, 160, 563, "FF35CF", "4|0|FF35CF,9|0|FF35CF,13|0|FF35CF,17|0|FF35CF,0|5|FF49D4,4|5|FF49D4,9|5|FF49D4,13|5|FF49D4,17|5|FF49D4", 0, 0.9, "机器技能"
+    )
+    // 战争机器技能就绪 = 英雄卡槽顶部"充能条"第 1 格亮起（用户在实机确认的机制）。
+    // 第 1 格位置固定在 (95,560)-(112,565)，亮色约 RGB C022FB（BGR FB22C0）。
+    // 由 tools/make_feature.py 从实机截图 `I:\coc\游戏截图\夜世界-英雄充能\夜世界-英雄充能进度1~3.jpg`
+    // 自动生成并自检（进度 1/2/3 命中、进度 0 不命中）。
+    override val HeroChargeReady = ColorSchema.parse(
+        95, 560, 112, 565, "FB22C0",
+        "0|0|FB22C1,16|4|FE3AC7,8|2|FC2AC2,2|4|FE3AC7",
+        0, 0.9, "英雄充能就绪"
     )
     // 夜飞机(空中机器)技能就绪粉光（源 战斗监控 16639/16664：FFB2FF 或 FE3AC7，位于英雄槽旁）。
     // 偏移按 (dx,dy)->(dy,-dx) 旋转；实际搜索区在 realAttack 中按英雄槽位置 rescope。

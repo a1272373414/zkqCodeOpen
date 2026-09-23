@@ -67,7 +67,7 @@
 |---|---|---|---|---|---|---|---|
 | T14 | 夜世界夜飞机(空中机器)英雄部署 | `jar/code/builderbase/attack/BuilderBaseAttack.kt` | 1天 | 中 | 源 夜飞机槽(15979) | 🔄 | 代码已实现，用户手动验证中 |
 | T15 | 夜世界多兵种识别与批量下兵 | `jar/code/builderbase/attack/BuilderBaseAttack.kt` + `builderbase` colors | 2天 | 中 | 源 函数123a(15997~16071) | 🔄 | 12 兵种颜色 + `deployAllTroops`；**实机发现单点落点会压到基地建筑区(不可下兵)**，已改为四象限多点候选 `buildDeployPoints()` + `deployTroopUntilGone()` 选卡后试至兵卡消失，待验证 |
-| T16 | 夜世界英雄技能自动释放 | `jar/code/builderbase/attack/BuilderBaseAttack.kt` | 1天 | 中 | 源 战斗监控(16606~16669) | 🔄 | 夜飞机按卡槽 rescope 检测粉光后点槽；**实机发现战争机器点 (x, y+100) 落到卡槽外**，已改为记录 `machineSlot` 并在粉光就绪时点卡槽释放，待验证 |
+| T16 | 夜世界英雄技能自动释放 | `jar/code/builderbase/attack/BuilderBaseAttack.kt` + `builderbase` colors | 1天 | 中 | 源 战斗监控(16606~16669) | 🔄 | 夜飞机按卡槽 rescope 检测粉光后点槽；战争机器改用**充能条第 1 格亮起**判据（新增 `HeroChargeReady`，位置 (95,560)-(112,565)、亮色 #C022FB，由用户实机截图经 `tools/make_feature.py` 标定），命中即点英雄卡槽释放，待验证 |
 | T17 | 场景识别健壮性（载入页/战斗中/编辑模式/未识别重试） | `jar/code/universal/SceneState.kt` + `colorpackage/UIColors.kt` | 1天 | 高 | 15 张实机未识别 debug 截图 | 🔄 | 新增 `GameScene.LOADING` 与特征 `GameLoadingNotice`(合规黑屏)/`BuilderBaseEditMode`(夜世界编辑模式)；战斗中(`EndBattle`等)归 `BATTLE`；未识别先等 1.5s×2 重试、载入等待 15–90s；载入页不再按返回（修复游戏退出确认弹窗），待验证 |
 | T18 | 日志分级与文件落盘 | `core/util/basic/ShowMessage.kt` + `core/util/fileactions/LogHelper.kt` | 1天 | 中 | — | 🔄 | `ShowMessage` 恢复旧 `invoke` 入口(保持旧 jar 二进制兼容)并新增 `run()/warn()/error()/log()`；`LogHelper` 按 DEBUG(全量 VERBOSE)/RELEASE(仅 INFO+) 分级落文件、缓冲 100→200；夜世界里程碑改 `ShowMessage.run()`，待验证 |
 
@@ -112,3 +112,4 @@
 | 2026-09-23 | T17 | 参数 | 载入等待上限 90s（常规 15s 即完成，版本更新时长载入由上限兜底）；非载入类未识别重试 2×1.5s 后才记入未识别 |
 | 2026-09-23 | T02 | 实现 | `NccMatcher` 接线：新增 `TemplateMatcher`（assets 模板加载+缓存、区域查询，阈值 0.75）；`SceneState` 新增模板兜底钩子 `TEMPLATE_RULES`（默认空，仅在未识别时兜底）。实测「整图搜索误命中 9/16 → 限区域 3/16 → 阈值 0.75 后 0/16」 |
 | 2026-09-23 | T19 | 新建+实现 | 新增特征标定工具链：`tools/make_feature.py`（截图+矩形 → 自动生成 `ColorSchema`，含正/负样本自检）、`tools/make_template.py`（裁剪模板到 `assets/templates` + 同口径 NCC 自检，支持 `--verify-region`/`--threshold`）；示例模板 `btn_bb_edit.png` |
+| 2026-09-23 | T16 | 修复 | 战争机器技能判据改为"英雄卡槽顶部**充能条第 1 格亮起**"（用户实机确认的机制）：新增 `HeroChargeReady` 特征（位置 (95,560)-(112,565)、亮色 RGB C022FB），由 `tools/make_feature.py` 从实机截图 `I:\coc\游戏截图\夜世界-英雄充能\进度0~3` 自动生成并自检（进度 1/2/3 命中、进度 0 不命中）；`realAttack` 命中即点英雄卡槽释放，不再依赖粉光与 `machineSlot`；`make_feature.py` 负样本自检支持 jpg/jpeg |
