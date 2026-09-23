@@ -85,10 +85,12 @@ suspend fun checkReconnections(): Boolean {
  * Counts pixels in the given region where R, G, B are all greater than 235 (white).
  * Uses absolute ByteBuffer.get(index) so it is position-independent.
  */
-private const val SPINNER_X1 = 400
-private const val SPINNER_Y1 = 250
-private const val SPINNER_X2 = 880
-private const val SPINNER_Y2 = 500
+// 橙色转圈只出现在屏幕正中央，采样区收窄到中央一带：原来的 (400,250)-(880,500) 覆盖太大，
+// 会把各种弹窗/界面里的橙色装饰一并算进来，造成"静止界面 = 网络卡死"的误判。
+private const val SPINNER_X1 = 480
+private const val SPINNER_Y1 = 280
+private const val SPINNER_X2 = 800
+private const val SPINNER_Y2 = 440
 private const val SPINNER_MIN_ORANGE = 300
 private const val SPINNER_STUCK_MS = 12_000L
 private const val SPINNER_SAMPLE_MS = 2_000L
@@ -99,18 +101,52 @@ private const val SPINNER_SAMPLE_MS = 2_000L
  *
  * @return true 表示已判定网络异常并重启了游戏。
  */
+/**
+ * 卡死计时（跨循环累计）：原实现在单次调用里 delay 采样 12 秒，会把主循环整整阻塞 12 秒——
+ * 夜世界「开始进攻」确认弹窗就因此白等十几秒，最后还被判成卡死重启游戏
+ * （实机日志：23:21:23 进入循环 → 23:21:38 重启，中间什么都没做）。
+ * 现在每轮循环只采样一次，用时间戳累计"橙色 + 画面无变化"的持续时长，不再阻塞调用方。
+ */
+private var spinnerStuckSince = 0L
+private var spinnerPrevFrame: ScreenCaptureManager.CaptureResult? = null
+
+private fun resetSpinnerWatch() {
+    spinnerStuckSince = 0L
+    spinnerPrevFrame = null
+}
+
 suspend fun detectStuckNetworkSpinner(): Boolean {
-    val first = ScreenCaptureManager.capture(asBitmap = false) as? ScreenCaptureManager.CaptureResult ?: return false
-    if (countOrangePixels(first) < SPINNER_MIN_ORANGE) return false
-    val start = System.currentTimeMillis()
-    var prev = first
-    while (System.currentTimeMillis() - start < SPINNER_STUCK_MS) {
-        delay(SPINNER_SAMPLE_MS)
-        val next = ScreenCaptureManager.capture(asBitmap = false) as? ScreenCaptureManager.CaptureResult ?: continue
-        if (countOrangePixels(next) < SPINNER_MIN_ORANGE) return false
-        if (frameDiffPixels(prev, next) > 200) return false
-        prev = next
+    // 先排除"静止界面"误判：夜世界「开始进攻」部队确认弹窗的中央有大量橙色装饰（部队卡上的
+    // 金色 x1 徽章、中部卡片图标），而该界面本身就是静止等待玩家点「立即寻找！」，正好命中
+    // 下面的"橙色像素 + 画面无变化"判据 —— 实机已复现：脚本卡在该界面被反复重启游戏。
+    if (findMultiColors(schema = MyColors.AttackNow) != null) {
+        resetSpinnerWatch()
+        return false
     }
+    // 同理：搜索对手界面（常驻"取消搜索"按钮）也是静止等待状态，正常流程由等待循环处理
+    if (findMultiColors(schema = MyColors.CancelAttackSearch) != null) {
+        resetSpinnerWatch()
+        return false
+    }
+
+    val shot = ScreenCaptureManager.capture(asBitmap = false) as? ScreenCaptureManager.CaptureResult ?: return false
+    if (countOrangePixels(shot) < SPINNER_MIN_ORANGE) {
+        resetSpinnerWatch()
+        return false
+    }
+    val prev = spinnerPrevFrame
+    if (prev != null && frameDiffPixels(prev, shot) > 200) {
+        resetSpinnerWatch() // 画面在变 → 正常的转圈动画，不是卡死
+        return false
+    }
+    spinnerPrevFrame = shot
+    val now = System.currentTimeMillis()
+    if (spinnerStuckSince == 0L) {
+        spinnerStuckSince = now // 首次命中，开始计时，本轮不做判定
+        return false
+    }
+    if (now - spinnerStuckSince < SPINNER_STUCK_MS) return false
+    resetSpinnerWatch()
     ShowMessage("检测到中央橙色转圈卡死超过12秒（网络异常），重启游戏")
     killGame()
     runGame()

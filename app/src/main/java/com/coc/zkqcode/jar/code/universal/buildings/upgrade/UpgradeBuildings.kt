@@ -221,7 +221,10 @@ private suspend fun tryToBatchBuildWalls(x: Int, y: Int, currentBase: BaseType) 
     val shouldSwipe = centerY >= 335
     if (shouldSwipe) {
         // Swipe up to avoid overlapping.
-        TouchActions.swipe(280, 480, 280, 320, delayTime = 600)//Swiped for 160 pixels here, so in the trajectory calculate, the offset for y should be 150
+        // 注意：swipe 是"按下 → 停顿 (delayTime×0.7×倍率) → 移动"，起点 (280,480) 常落在村庄建筑上，
+        // 原来 delayTime=600（停顿 420ms）会被游戏判定为"长按拖动建筑"→ 误拖城墙。改用很短的停顿，
+        // 滑动距离（480→320，160px）保持不变。
+        TouchActions.swipe(280, 480, 280, 320, delayTime = 120)
     }
     // Locate the arrow element using YOLO detector
     delayWithMultiplier(200)

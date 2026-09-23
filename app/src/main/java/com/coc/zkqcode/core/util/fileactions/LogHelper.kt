@@ -19,7 +19,9 @@ object LogHelper {
     private val isRestarting = AtomicBoolean(false)
 
     // 每个日志文件保留的最大行数（滚动覆盖，仅保留最近 N 行）
-    private const val MAX_LOG_LINES = 200
+    // 临时调高到 2000：夜世界下兵诊断现在每轮打 3 行（卡扫描/选中卡/落点），
+    // 一场约 200 行，500 行会把前一场的关键部分滚掉，不利于排查。
+    private const val MAX_LOG_LINES = 2000
 
     fun initTimber(context: Context) {
         if (BuildConfig.DEBUG) {

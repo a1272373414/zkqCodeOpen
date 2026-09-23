@@ -100,7 +100,13 @@ object TouchActions {
         isJitter: Boolean = true
     ) {
         waitForPlay()
-        val actualDelayTime = delayTime ?: Random.nextInt(300, 401)
+        // 默认停顿从 300~400ms 收紧到 90~130ms。
+        // swipe 的动作是"按下 → 停顿(实际 ≈ delayTime×0.7×倍率) → 移动"，停顿一旦超过游戏的
+        // 长按阈值（约 200ms），而起点又落在建筑上，就会被判定为"长按拖动建筑"。
+        // 项目里仍有十几处调用没传 delayTime（EnterTargetBase / MainBaseResearch / CheckTutorials /
+        // CheckNewArrows / UpgradeGearsAndPets / HeroHallHelper / SearchOpponents 等），
+        // 与其逐个排查，不如把默认值直接收进安全区间（地图拖动不依赖精确时长）。
+        val actualDelayTime = delayTime ?: Random.nextInt(150, 201)
         val delayMultiplier = getDelayMultiplier()
 
         touchDown(startX.toFloat(), startY.toFloat(), 1)

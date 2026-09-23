@@ -66,10 +66,17 @@
 | ID | 任务 | 目标文件(当前项目) | 工作量 | 优先级 | 源依据 | 状态 | 备注 |
 |---|---|---|---|---|---|---|---|
 | T14 | 夜世界夜飞机(空中机器)英雄部署 | `jar/code/builderbase/attack/BuilderBaseAttack.kt` | 1天 | 中 | 源 夜飞机槽(15979) | 🔄 | 代码已实现，用户手动验证中 |
-| T15 | 夜世界多兵种识别与批量下兵 | `jar/code/builderbase/attack/BuilderBaseAttack.kt` + `builderbase` colors | 2天 | 中 | 源 函数123a(15997~16071) | 🔄 | 12 兵种颜色 + `deployAllTroops`；**实机发现单点落点会压到基地建筑区(不可下兵)**，已改为四象限多点候选 `buildDeployPoints()` + `deployTroopUntilGone()` 选卡后试至兵卡消失，待验证 |
-| T16 | 夜世界英雄技能自动释放 | `jar/code/builderbase/attack/BuilderBaseAttack.kt` + `builderbase` colors | 1天 | 中 | 源 战斗监控(16606~16669) | 🔄 | 夜飞机按卡槽 rescope 检测粉光后点槽；战争机器改用**充能条第 1 格亮起**判据（新增 `HeroChargeReady`，位置 (95,560)-(112,565)、亮色 #C022FB，由用户实机截图经 `tools/make_feature.py` 标定），命中即点英雄卡槽释放，待验证 |
+| T15 | 夜世界多兵种识别与批量下兵 | `jar/code/builderbase/attack/BuilderBaseAttack.kt` + `builderbase` colors | 2天 | 中 | 源 函数123a(15997~16071) | 🔄 | 12 兵种颜色 + `deployAllTroops`；**实机发现单点落点会压到基地建筑区(不可下兵)**，已改为四象限多点候选 `buildDeployPoints()` + `buildFallbackDeployPoints()` 边缘环带兜底；下兵状态机：白框 `isCardSelected()` 判选中（避免重复点卡=放技能）、灰卡饱和度 `cardSaturation()` 判已下完、单轮上限 `MAX_TROOPS_PER_ROUND=30`/连点 `DEPLOY_TAPS_PER_ROUND=8`、英雄卡只点一次并立刻标记耗尽，待验证 |
+| T16 | 夜世界英雄技能自动释放 | `jar/code/builderbase/attack/BuilderBaseAttack.kt` + `builderbase` colors | 1天 | 中 | 源 战斗监控(16606~16669) | 🔄 | 夜飞机按卡槽 rescope 检测粉光后点槽；战争机器改用**充能条第 1 格亮起**判据（新增 `HeroChargeReady`，位置 (95,560)-(112,565)、亮色 #C022FB，由用户实机截图经 `tools/make_feature.py` 标定），命中即点英雄卡槽释放；**颜色串是 BGR 且为上中下三层垂直叠色**，`HeroChargeReady` 修正为 (93,559)-(116,570) 三层 FB25C1/FE3AC7/FF98DF、`TroopSkills` 同理修正（此前按 RGB 解释被改坏），待验证 |
 | T17 | 场景识别健壮性（载入页/战斗中/编辑模式/未识别重试） | `jar/code/universal/SceneState.kt` + `colorpackage/UIColors.kt` | 1天 | 高 | 15 张实机未识别 debug 截图 | 🔄 | 新增 `GameScene.LOADING` 与特征 `GameLoadingNotice`(合规黑屏)/`BuilderBaseEditMode`(夜世界编辑模式)；战斗中(`EndBattle`等)归 `BATTLE`；未识别先等 1.5s×2 重试、载入等待 15–90s；载入页不再按返回（修复游戏退出确认弹窗），待验证 |
-| T18 | 日志分级与文件落盘 | `core/util/basic/ShowMessage.kt` + `core/util/fileactions/LogHelper.kt` | 1天 | 中 | — | 🔄 | `ShowMessage` 恢复旧 `invoke` 入口(保持旧 jar 二进制兼容)并新增 `run()/warn()/error()/log()`；`LogHelper` 按 DEBUG(全量 VERBOSE)/RELEASE(仅 INFO+) 分级落文件、缓冲 100→200；夜世界里程碑改 `ShowMessage.run()`，待验证 |
+| T18 | 日志分级与文件落盘 | `core/util/basic/ShowMessage.kt` + `core/util/fileactions/LogHelper.kt` | 1天 | 中 | — | 🔄 | `ShowMessage` 恢复旧 `invoke` 入口(保持旧 jar 二进制兼容)并新增 `run()/warn()/error()/log()`；`LogHelper` 按 DEBUG(全量 VERBOSE)/RELEASE(仅 INFO+) 分级落文件、缓冲 100→200→**2000**（夜世界下兵诊断每轮 3 行、一场约 200 行，200 行会滚掉上一场）；夜世界里程碑改 `ShowMessage.run()`，待验证 |
+
+### 通用稳定性修复（实机问题驱动，不入阶段表）
+
+| ID | 任务 | 目标文件(当前项目) | 工作量 | 优先级 | 源依据 | 状态 | 备注 |
+|---|---|---|---|---|---|---|---|
+| T20 | 「橙色转圈卡死」检测误判修复 | `jar/code/universal/smalltools/CheckReconnections.kt` | 0.5天 | 高 | 实机：夜世界「开始进攻」确认弹窗被判网络卡死并重启游戏 | 🔄 | 采样区收窄到中央 (480,280)-(800,440) 避免橙色装饰误入；卡死计时改为**跨循环累计**（原实现单次调用阻塞 12s，导致弹窗白等十几秒后仍被重启）；命中 `AttackNow`/`CancelAttackSearch` 等静止等待界面直接放行并复位计时，待验证 |
+| T21 | swipe 手势误触统一（长按拖建筑 / 被判点击弹「信息」面板） | `core/util/touchactions/TouchActions.kt` + 夜世界/主世界 zoom、收集资源、城墙批量建造调用点 | 0.5天 | 高 | 实机：swipe 起点常压在村庄建筑/城墙上 | 🔄 | `swipe` 是「按下→停顿(delayTime×0.7×倍率)→移动」：停顿过长被判长按拖建筑、过短被判点击选中建筑。默认 300~400ms→150~200ms；各调用点统一 `delayTime=180`（收集资源/夜世界 zoom/主世界 zoom 由 100、120、600、800 统一为 180，城墙批量 600→120）；收集资源盲点后补 `clickRightBottom()` 清掉选中状态，待验证 |
 
 ---
 
@@ -84,9 +91,9 @@
 
 ## 四、进度汇总
 
-- 总任务数：19（T01–T19）
+- 总任务数：21（T01–T21）
 - ✅ 已完成：0
-- 🔄 进行中：7（T02,T14,T15,T16,T17,T18,T19）
+- 🔄 进行中：9（T02,T14,T15,T16,T17,T18,T19,T20,T21）
 - ⬜ 待办：11（T01,T03–T05,T07–T13）
 - ⏸ 暂停：1（T06 延后）
 - ❌ 不抄/取消：2（村庄改名、部落靓标签，见决策记录）
@@ -114,3 +121,9 @@
 | 2026-09-23 | T19 | 新建+实现 | 新增特征标定工具链：`tools/make_feature.py`（截图+矩形 → 自动生成 `ColorSchema`，含正/负样本自检）、`tools/make_template.py`（裁剪模板到 `assets/templates` + 同口径 NCC 自检，支持 `--verify-region`/`--threshold`）；示例模板 `btn_bb_edit.png` |
 | 2026-09-23 | T15 | 修复 | 进入夜世界后"收集资源"误拖动建筑：`collectBuilderBaseResources()` 两次下滑起点 (587,420) 压在城墙上，且第二次未传 `delayTime`（`TouchActions.swipe` 按下后停顿 300~400ms×倍率）被游戏判定为"长按拖动建筑"→ 误拖城墙；已改为两次都传 `delayTime = 100` |
 | 2026-09-23 | T16 | 修复 | 战争机器技能判据改为"英雄卡槽顶部**充能条第 1 格亮起**"（用户实机确认的机制）：新增 `HeroChargeReady` 特征（位置 (95,560)-(112,565)、亮色 RGB C022FB），由 `tools/make_feature.py` 从实机截图 `I:\coc\游戏截图\夜世界-英雄充能\进度0~3` 自动生成并自检（进度 1/2/3 命中、进度 0 不命中）；`realAttack` 命中即点英雄卡槽释放，不再依赖粉光与 `machineSlot`；`make_feature.py` 负样本自检支持 jpg/jpeg |
+| 2026-09-24 | T15 | 实现 | 下兵状态机：`isCardSelected()` 用"选中卡左缘贯穿整卡的纯白竖线"判选中（差分法从用户标注图 `夜世界-已死亡-已放技能-未放技能-选中-未选中.jpg` 标定，此前凭缩放截图估算坐标取偏才识别不出）；`cardSaturation()` 用高饱和占比判卡已下完（已死亡 0.016 vs 有兵 0.32~0.43，阈值 0.15）；单轮上限 `MAX_TROOPS_PER_ROUND=30`、每轮连点 `DEPLOY_TAPS_PER_ROUND=8` 个落点（一张女巫卡 20 兵，一轮一点太慢）；`exhaustedCards` 跳过已下完的卡（放空的卡位色特征仍匹配得到）；英雄卡 x<180 不在 8 卡位网格内，白框判定无效→改为只点一次（`heroCardTapped`）并立刻标记耗尽（否则英雄排 TROOP_CARDS[0] 且永不变灰，会一直被挑中，兵种轮不到） |
+| 2026-09-24 | T15 | 实现 | 落点兜底 `buildFallbackDeployPoints()`：对方基地铺满画面中央时部署线整段压在基地里，改为贴四边的密集环带（step 60），剔除左下「结束战斗」按钮 (x<160,y 470~525) 与底部卡槽区，按离中心距离降序尝试 |
+| 2026-09-24 | T16 | 修复 | 颜色串是 **BGR 且为上中下三层垂直叠色**（用户指正）：`HeroChargeReady` 修正为 (93,559)-(116,570) 三层 FB25C1/FE3AC7/FF98DF（实机 RGB C125FB/C73AFE/DF98FF），`TroopSkills` 修正为 (189,566)-(1241,600) FF5AEE + 垂直偏移 FD34C5/FE3CC7/FF46C9/FF7AD7（原 FF44C9 本就是 BGR，此前按 RGB 解释被改坏）；未充能整条灰 252525 不命中 |
+| 2026-09-24 | T20 | 新建+实现 | 断线重连卡死检测：采样区 (400,250)-(880,500) 收窄到 (480,280)-(800,440)；卡死计时改为跨循环累计（`spinnerStuckSince` + 上一帧缓存，不再单次阻塞 12s）；新增 `AttackNow`/`CancelAttackSearch` 静止等待界面白名单直接放行。修复实机"夜世界「开始进攻」确认弹窗被判网络卡死并重启游戏" |
+| 2026-09-24 | T21 | 新建+实现 | swipe 手势统一：`TouchActions.swipe` 默认停顿 300~400ms→150~200ms（项目内十余处未传 delayTime 的调用一并受益）；`ZoomSmallBuilderBase`(120/800→180)、`ZoomSmallMainBase`(600→180)、`BuilderBaseCollectResources`(100→180)、`UpgradeBuildings` 城墙批量(600→120)；收集资源盲点未找到资源车时补 `clickRightBottom()` 清掉建筑选中弹窗。兼顾"停顿过长→长按拖建筑"与"过短→判成点击选中建筑"两侧 |
+| 2026-09-24 | T18 | 参数 | `LogHelper.MAX_LOG_LINES` 200→2000（一场夜世界下兵诊断约 200 行，200 行缓冲会滚掉上一场，不利于排查） |
