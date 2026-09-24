@@ -50,14 +50,6 @@ private const val MAX_TROOPS_PER_ROUND = 30
 private const val DEPLOY_TAPS_PER_ROUND = 8
 
 /**
- * 兵卡"已下完/已死亡变灰"的高饱和像素占比阈值（低于它即认为这张卡已没有兵可下）。
- *
- * 实机采样（夜世界-已死亡-已放技能-未放技能-选中-未选中.jpg）：已死亡的那张卡整卡高饱和占比
- * 只有 **0.016**，而其余"还有兵"的卡在 **0.32~0.43**。两者差距极大，取 0.15 判定很安全。
- */
-private const val CARD_GRAY_SATURATION = 0.15
-
-/**
  * 探测兵卡是否处于"选中"状态：**选中卡的左缘有一条贯穿整卡高度的纯白竖线**，未选中卡同一位置
  * 是纯黑/暗色 —— 黑白对比，比"白边/紫边"那种模糊判据干净得多。
  *
@@ -95,7 +87,15 @@ private fun slotIndex(x: Int): Int {
 private val slotTapCount = IntArray(9)
 
 /** 技能轮询的最长时长（毫秒）：兜底，避免战斗异常时卡在这里不出。 */
-private const val SKILL_LOOP_MAX_MS = 120_000L
+/**
+ * 技能轮询的单次时长上限。
+ *
+ * 原来设 120s，实机表现是**每次下兵后都死守 120 秒**才回到主循环，
+ * 于是"进第二区域""继续下兵"都要干等两分钟（日志 05:40:34 进 → 05:42:34 才退）。
+ * 英雄充能约 15 秒 1 格，守 30 秒足够覆盖 1~2 次释放；到点就交回主循环，
+ * 主循环下一轮又会触发 normalBattle → 下兵 → 再进技能轮询，节奏更合理。
+ */
+private const val SKILL_LOOP_MAX_MS = 30_000L
 
 /**
  * 技能轮询 —— **只管放技能**：英雄技能 + 各兵种部队技能。
@@ -194,36 +194,64 @@ private fun whiteLineCount(s: ScreenCaptureManager.CaptureResult, x0: Int): Int 
     return best
 }
 
+// ---------- 兵卡"是否还有兵可下"判据：顶部紫色技能条的位置 ----------
+// 用户实机确认：**已下兵与未下兵，卡顶部那条紫色技能条的位置（高度）不一样**。
+// 由 I:\coc\游戏截图\夜世界-英雄充能 全目录 10 张截图逐行统计紫色像素标定：
+//   · 兵还没下 → 技能条在较低位置，顶部 y ≈ **588**（选中时略上移到 582）；
+//   · 兵已下场 → 技能条整体上移约 20px，顶部 y ≈ **568**；
+//   · 技能已放 / 已阵亡 → 整条消失（无紫色条）。
+// 所以判据 = 找到紫色条的顶部 y：无条 或 顶部 y < [SKILL_BAR_TOP_DEPLOYED] → 已下放（不点）；
+// 否则（顶部 y ≥ 578）→ 还没下，可以点。
+// 跨图一致性验证：「请选择其他兵种」6 个卡位全部 588（未下）；
+// 「已经派出所有兵力」6 个卡位全部 568（已下完）；进度 0~3 全部 568。
+// 颜色判据（品红/紫粉，样本 EE5AFF / C534FD / C73CFE / C946FF）：B>200 且 R>150 且 G<150。
+// 注意：这个判据对卡位坐标的偏差不敏感（条横跨整卡宽 ~90px，窗口取 ±45 偏移二三十像素仍能命中），
+// 所以不需要像白框判据那样依赖精确的卡位中心。
+private const val SKILL_BAR_Y1 = 556
+private const val SKILL_BAR_Y2 = 620
+/** 紫色条顶部 y 小于该值 = 兵已下场（实测已下场 568、未下 582~588）。 */
+private const val SKILL_BAR_TOP_DEPLOYED = 578
+/** 一行的紫色像素数达到该值才认为"条在这一行"（滤掉零星噪点）。 */
+private const val SKILL_BAR_ROW_MIN_PIXELS = 3
+
 /**
- * 统计某个兵卡所在竖直区域的高饱和像素占比，用于判断这张卡"还有兵可下"还是"已下完变灰"。
+ * 测量该卡顶部紫色技能条的**顶部 y**（自上而下扫，第一行紫色像素即条顶）。
  *
- * 判据来自实机截图逐列采样（I:\coc\游戏截图\夜世界-英雄充能\夜世界-英雄充能进度-部队技能-框选.jpg）：
- * 该图底部有一张已经下完的灰卡，其高饱和占比只有 0.04~0.24，而其余还有兵的亮卡在 0.35~0.60。
- * 取 [CARD_GRAY_SATURATION] = 0.25 即可把两者分开。
- *
- * 为什么必须判这个：**放空的卡位色特征依旧匹配得到**（实机日志里英雄卡下完后还反复出现在卡扫描
- * 结果里），只靠"特征是否匹配"会不断去点一张没兵的卡，那一次落点必然白费。
+ * @return 顶部 y；**-1 = 没有紫色条**（技能已放或已阵亡）。
+ * 拆出这个函数是为了把实测值打进日志（实机与离线截图有偏差时能一眼看出）。
  */
-private fun cardSaturation(screen: ScreenCaptureManager.CaptureResult?, cx: Int): Double {
-    val s = screen ?: return 1.0   // 拿不到截图时不判定为"灰卡"，宁可多试一次
+private fun cardSkillBarTop(screen: ScreenCaptureManager.CaptureResult?, cardX: Int): Int {
+    val s = screen ?: return -1
     val buf = s.buffer
-    var saturated = 0
-    var total = 0
-    // 抽样：每 3 行取 1 行。原来逐像素扫近 1 万点，是每轮耗时的第二大来源。
-    for (y in 578 until 676 step 3) {
-        for (x in (cx - 45)..(cx + 45)) {
-            if (x < 0 || x >= 1280) continue
-            val o = y * screen.rowStride + x * screen.pixelStride
-            val b = buf.get(o).toInt() and 0xFF
-            val g = buf.get(o + 1).toInt() and 0xFF
-            val r = buf.get(o + 2).toInt() and 0xFF
-            val maxC = maxOf(b, g, r)
-            val minC = minOf(b, g, r)
-            if (maxC > 0 && (maxC - minC).toDouble() / maxC > 0.35) saturated++
-            total++
+    val cx = slotCenterX(cardX)
+    for (y in SKILL_BAR_Y1..SKILL_BAR_Y2) {
+        var n = 0
+        var x = cx - 45
+        while (x <= cx + 45) {
+            if (x >= 0 && x < 1280) {
+                val o = y * s.rowStride + x * s.pixelStride
+                val b = buf.get(o).toInt() and 0xFF
+                val g = buf.get(o + 1).toInt() and 0xFF
+                val r = buf.get(o + 2).toInt() and 0xFF
+                if (b > 200 && r > 150 && g < 150) n++
+            }
+            x += 2
         }
+        if (n >= SKILL_BAR_ROW_MIN_PIXELS) return y
     }
-    return if (total == 0) 1.0 else saturated.toDouble() / total
+    return -1
+}
+
+/**
+ * 该卡是否还有兵可下（紫色技能条处于"未下"的位置）。
+ *
+ * @param cardX 兵卡特征匹配到的横坐标，内部归位到卡位中心后按固定窗口取样。
+ * @return true 表示可以点这张卡；拿不到截图时返回 true（宁可多试一次）。
+ */
+private fun isCardDeployable(screen: ScreenCaptureManager.CaptureResult?, cardX: Int): Boolean {
+    if (screen == null) return true
+    val top = cardSkillBarTop(screen, cardX)
+    return top in SKILL_BAR_TOP_DEPLOYED..SKILL_BAR_Y2
 }
 
 /** 夜世界可下兵的兵种卡（顺序即优先级：英雄与夜飞机在前，其余按识别顺序）。 */
@@ -350,13 +378,25 @@ private suspend fun findTroopSkillSlot(screen: ScreenCaptureManager.CaptureResul
 private val exhaustedCards = mutableSetOf<Int>()
 
 /**
- * 英雄卡（卡栏最左、x < 180）是否已经点过一次选卡。
+ * 本局"已经下完"的**卡位号**（1~8），挑卡时直接跳过。
  *
- * 英雄卡不在 8 个兵卡卡位网格内，白框判定对它无效（会把 x≈106 归位到卡位1，测错卡位），
- * 结果每轮都被判"未选中"而重复点卡 —— 而**点同一张卡第二次 = 放技能**，
- * 于是表现为"英雄刚下放就放技能"（实机日志已确认）。英雄是单体，点一次足够。
+ * 必须按卡位去重、不能按兵种序号：[TROOP_CARDS] 的下标是**兵种**序号，而同一种兵会占多个
+ * 卡位（实机一局有 6 张女巫卡）。若按兵种序号记录，第一张女巫下完就会把其余 5 张一起跳过，
+ * 兵根本下不完。英雄卡 x<180 不在卡位网格内（[slotIndex] 返回 0），仍由 [exhaustedCards] 处理。
  */
-private var heroCardTapped = false
+private val exhaustedSlots = mutableSetOf<Int>()
+
+/**
+ * 已点过一次选卡的**非网格卡**（卡栏最左、x < 180：英雄 / 夜飞机），按兵种序号记录。
+ *
+ * 这些卡不在 8 个兵卡卡位网格内，白框判定对它们无效，所以只能靠"点过一次"来避免重复点 ——
+ * 而**点同一张卡第二次 = 放技能**，会白白把技能交掉（实机日志已确认）。
+ *
+ * 必须**逐兵种**记录而不是用一个布尔：英雄(idx 0)和夜飞机(idx 1)都在 x<180，
+ * 之前共用一个 heroCardTapped，第一区域点了英雄后，第二区域扫到夜飞机也被当成
+ * "英雄已点过"而只点落点、不点卡，夜飞机整局下不去（2026-09-24 实机）。
+ */
+private val offGridTapped = mutableSetOf<Int>()
 
 /**
  * 本局战斗开始时间（[realAttack] 入口记录）。
@@ -478,8 +518,9 @@ private suspend fun realAttack(mode: String, battleNumber: Int = 1, battleTimes:
     machineSlot = null
     battleCopterSlot = null
     troopSkillTappedSlot.clear()
-    heroCardTapped = false
+    offGridTapped.clear()
     exhaustedCards.clear()
+    exhaustedSlots.clear()
     battleStartedAt = System.currentTimeMillis()
     slotTapCount.fill(0)
     while (true) {
@@ -671,6 +712,7 @@ private suspend fun deployTroops(deployPoints: List<Point>): Boolean {
     var deployed = 0
     var guard = 0
     var lastIdx = -1
+    var lastSlot = 0
     // 上一轮点完落点的那张卡：下一轮用新截图复查"选中是否被清空"，据此判断落点有没有真的下出兵
     // （下兵成功 → 游戏清空选中 → 白框消失）。这样不必为复查再单独截一次图，省一次截图耗时。
     var pendingCard: Point? = null
@@ -689,10 +731,11 @@ private suspend fun deployTroops(deployPoints: List<Point>): Boolean {
                 )
                 noProgressRounds = if (still) noProgressRounds + 1 else 0
                 // 这一轮的落点一个兵都没下去 → 这张卡（或这批落点）不可用，换下一张，
-                // 否则会一直卡在同一张卡上反复空点。
-                if (still && lastIdx >= 0) {
-                    accountLog("下兵诊断：卡#$lastIdx 这批落点无效 → 标记跳过，换下一张")
-                    exhaustedCards.add(lastIdx)
+                // 否则会一直卡在同一张卡上反复空点。按**卡位号**记录（同兵种有 6 张卡，
+                // 记兵种序号会把其余同款卡一起跳过）。
+                if (still && lastSlot > 0) {
+                    accountLog("下兵诊断：卡位#$lastSlot 这批落点无效 → 标记跳过，换下一张")
+                    exhaustedSlots.add(lastSlot)
                 }
             }
             pendingCard = null
@@ -721,9 +764,13 @@ private suspend fun deployTroops(deployPoints: List<Point>): Boolean {
             accountLog("夜世界：连续 $noProgressRounds 轮落点无效，判定无法继续下兵（已下 $deployed 个）")
             return true
         }
-        if (hasDeployHint(screen) && lastIdx >= 0) {
-            val newly = exhaustedCards.add(lastIdx)
-            accountLog("夜世界：下兵提示 → 卡#$lastIdx 已放完${if (newly) "，标记跳过" else "（重复标记）"}（本轮尝试 $deployed 次）")
+        if (hasDeployHint(screen) && (lastSlot > 0 || lastIdx >= 0)) {
+            // 按卡位号记录（同兵种 6 张卡，记兵种序号会把其余同款卡一起跳过）
+            val newly = if (lastSlot > 0) exhaustedSlots.add(lastSlot) else exhaustedCards.add(lastIdx)
+            accountLog(
+                "夜世界：下兵提示 → ${if (lastSlot > 0) "卡位#$lastSlot" else "卡#$lastIdx"} 已放完" +
+                    "${if (newly) "，标记跳过" else "（重复标记）"}（本轮尝试 $deployed 次）"
+            )
             // 诊断：就在"某兵种刚下完"的这个时刻，看技能条是什么状态 ——
             // 用户反馈的现象是"一个兵种下完就放技能"，这里把两条技能条的存在与否记下来，
             // 用来判断技能到底是不是在这个时刻被点掉的（下一段主循环日志会给出点击来源）。
@@ -734,6 +781,7 @@ private suspend fun deployTroops(deployPoints: List<Point>): Boolean {
                     " 部队技能条=${troopBar?.let { "(${it.x},${it.y})" } ?: "无"}"
             )
             lastIdx = -1
+            lastSlot = 0
             delayWithMultiplier(300) // 等提示消失再继续，避免同一帧反复命中
             continue
         }
@@ -745,48 +793,97 @@ private suspend fun deployTroops(deployPoints: List<Point>): Boolean {
         // 顺序扫、命中即停通常 1~3 次匹配就够（英雄/夜飞机/女巫排在前，多数局第一张就中）。
         var card: Point? = null
         var cardIdx = -1
+        var cardSlot = 0
+        // 判据失效兜底用：记住"按特征匹配到的第一张卡"，万一紫色条判据在实机上把全部卡
+        // 都判成已下放（2026-09-24 实机翻过一次：整局一个兵都没下），就退回按特征下兵。
+        var fallbackCard: Point? = null
+        var fallbackIdx = -1
+        var fallbackSlot = 0
         for ((idx, schema) in TROOP_CARDS.withIndex()) {
-            if (idx in exhaustedCards) continue
-            val found = findMultiColors(byteBuffer = screen, schema = schema) ?: continue
-            // 已下完的卡会变灰：高饱和像素占比明显偏低，这类卡不允许再点（点它那次落点必然白费）
-            val sat = cardSaturation(screen, found.x)
-            if (sat < CARD_GRAY_SATURATION) {
-                accountLog("下兵诊断：卡#$idx @(${found.x},${found.y}) 已变灰(饱和=${"%.2f".format(sat)})→ 不点")
-                continue
+            if (idx in exhaustedCards) continue          // 英雄等不在卡位网格内的卡
+            // 同一兵种占多个卡位，而 findMultiColors 只返回第一个匹配位置（最左边那张）。
+            // 那张若已下完，把搜索起点右移继续找同兵种的下一个卡位，否则同款兵永远轮不到。
+            var fromX = 0
+            while (fromX < 1279) {
+                val found = findMultiColors(
+                    byteBuffer = screen,
+                    schema = ColorSchema.rescope(schema, fromX, 596, 1279, 700, 0)
+                ) ?: break
+                val slot = slotIndex(found.x)
+                if (slot in exhaustedSlots) {
+                    fromX = found.x + 40                 // 该卡位已下完 → 找同兵种的下一个卡位
+                    continue
+                }
+                if (fallbackCard == null) {
+                    fallbackCard = Point(found.x, found.y)
+                    fallbackIdx = idx
+                    fallbackSlot = slot
+                }
+                // 英雄卡（含夜飞机这类"卡栏最左、x<180"的卡）**另走一套，不套紫色条判据**：
+                // 它们上方那条粉色的是英雄**充能条**（y559~567、D36AFF），同样满足紫色判据，
+                // 且位置偏上（<578），会被误判成"兵已下场"—— 实机表现就是战斗刚开始英雄就被
+                // 判已下放，整局一个英雄都不下（2026-09-24 实机日志已确认）。
+                // 它们各自是否点过由 [offGridTapped] 按兵种序号分别记录。
+                if (found.x >= 180) {
+                    val barTop = cardSkillBarTop(screen, found.x)
+                    if (!isCardDeployable(screen, found.x)) {
+                        accountLog(
+                            "下兵诊断：卡#$idx @(${found.x},${found.y}) 卡位#$slot " +
+                                "紫色条顶部=${if (barTop < 0) "无条" else barTop} → 兵已下放，不点"
+                        )
+                        if (slot > 0) exhaustedSlots.add(slot)
+                        fromX = found.x + 40
+                        continue
+                    }
+                    accountLog("下兵诊断：卡#$idx @(${found.x},${found.y}) 卡位#$slot 紫色条顶部=$barTop → 可点")
+                } else {
+                    accountLog("下兵诊断：卡#$idx @(${found.x},${found.y}) 英雄/非网格卡 → 不套紫色条判据，按选卡逻辑处理")
+                }
+                card = Point(found.x, found.y)
+                cardIdx = idx
+                cardSlot = slot
+                break
             }
-            card = Point(found.x, found.y)
-            cardIdx = idx
-            break
+            if (card != null) break
+        }
+        // 整体兜底：**一个兵都还没下**却被判"全部已下放" → 判据在实机上整体失效，
+        // 直接按特征匹配下兵，绝不能出现整局一个兵都不下的情况。
+        if (card == null && deployed == 0 && fallbackCard != null) {
+            accountLog("下兵诊断：紫色条判据把全部卡判为已下放，但本轮还没下过兵 → 判据失效兜底，按特征下兵")
+            card = fallbackCard
+            cardIdx = fallbackIdx
+            cardSlot = fallbackSlot
         }
         if (card == null) {
-            accountLog("夜世界：已无可下兵种卡（含已变灰），停止下兵（本轮尝试 $deployed 次）")
+            accountLog("夜世界：已无可下兵种卡（全部已下放），停止下兵（本轮尝试 $deployed 次）")
             return true
         }
         lastIdx = cardIdx
-        val cardName = "${TROOP_CARDS[cardIdx].name ?: "未命名"}@#$cardIdx"
+        lastSlot = cardSlot
+        val cardName = "${TROOP_CARDS[cardIdx].name ?: "未命名"}@#$cardIdx@卡位#$cardSlot"
 
         // ③ 选卡 + 下兵（用户实机确认的机制）：
         //   · 点一次卡         → **选中**该兵种；
         //   · 再点一次同一张卡 → **释放该兵种的技能**（不是取消选中！），并清空选中。
-        //   所以每轮只点一次卡；英雄卡（卡栏最左、x<180）不在 8 个卡位网格内，白框判定对它无效，
-        //   改成"只点一次"。
+        //   所以每轮只点一次卡；非网格卡（卡栏最左、x<180：英雄 / 夜飞机）白框判定无效，
+        //   改成"每张只点一次"，按兵种序号分别记在 [offGridTapped]。
         val p = points[deployed % points.size]             // 轮转候选落点
-        val isHeroCard = card.x < 180
-        val (selected, whiteN) = if (isHeroCard) false to -1 else isCardSelected(screen, card.x)
-        val needTap = if (isHeroCard) !heroCardTapped else !selected
+        val isOffGrid = card.x < 180
+        val (selected, whiteN) = if (isOffGrid) false to -1 else isCardSelected(screen, card.x)
+        val needTap = if (isOffGrid) cardIdx !in offGridTapped else !selected
         if (needTap) {
             accountLog(
                 "下兵诊断：卡#$cardName " +
-                    (if (isHeroCard) "英雄卡(只点一次选卡)" else "未选中(左右白线=$whiteN)") +
+                    (if (isOffGrid) "非网格卡(只点一次选卡)" else "未选中(左右白线=$whiteN)") +
                     " → 点卡 @(${card.x},${card.y}) 再点落点 @(${p.x},${p.y})"
             )
             logSlotTap("下兵选卡", card.x, card.y)
             TouchActions.tap(card.x, card.y, delayTime = 100)
-            if (isHeroCard) heroCardTapped = true
+            if (isOffGrid) offGridTapped.add(cardIdx)
         } else {
             accountLog(
                 "下兵诊断：卡#$cardName " +
-                    (if (isHeroCard) "英雄卡已点过" else "已选中(左右白线=$whiteN)") +
+                    (if (isOffGrid) "非网格卡已点过" else "已选中(左右白线=$whiteN)") +
                     " → 直接点落点 @(${p.x},${p.y})"
             )
         }
@@ -801,10 +898,10 @@ private suspend fun deployTroops(deployPoints: List<Point>): Boolean {
             taps++
         }
         accountLog("下兵诊断：卡#$cardName 连点 $taps 个落点（本轮累计 $deployed 次）")
-        // 英雄是单体：一轮（1 次选卡 + 连点 8 个落点）就够。用完**立刻标记跳过** ——
-        // 否则它排在 TROOP_CARDS[0] 优先级最高、又永远不会"变灰"，就会一直被挑中，
+        // 英雄/夜飞机是单体：一轮（1 次选卡 + 连点 8 个落点）就够。用完**立刻标记跳过** ——
+        // 否则英雄排在 TROOP_CARDS[0] 优先级最高、又永远不会"变灰"，就会一直被挑中，
         // 兵种卡轮不到，表现为"下完英雄要等很久才开始下兵"。
-        if (isHeroCard) exhaustedCards.add(cardIdx)
+        if (isOffGrid) exhaustedCards.add(cardIdx)
         // 落点结果留到下一轮用那张截图复查（省掉一次额外截图，见循环开头 pendingCard）
         pendingCard = card
     }
