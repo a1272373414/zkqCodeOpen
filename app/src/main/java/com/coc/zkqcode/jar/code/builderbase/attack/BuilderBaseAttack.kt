@@ -109,7 +109,7 @@ private const val SKILL_LOOP_MAX_MS = 30_000L
  * 退出条件：检测到回营按钮（战斗结束）或超过 [SKILL_LOOP_MAX_MS]。
  * **不是"几轮没技能就退出"**：英雄技能会持续充能（约 15 秒 1 格），要一直守着放。
  */
-private suspend fun releaseSkillsLoop() {
+suspend fun releaseSkillsLoop() {
     val start = System.currentTimeMillis()
     var released = 0
     while (System.currentTimeMillis() - start < SKILL_LOOP_MAX_MS) {
@@ -656,20 +656,29 @@ private suspend fun normalBattle(isNormal: Boolean = true) {
     if (!isNormal) return
     // 先用主用下兵点（源四象限部署线，常规布局够用）；只有在整轮都没把兵下出去时
     // （例如对方基地铺满画面、只有边缘能下兵的少数布局），才启用保底边缘点再试一轮。
-    val mainDeployDone = deployTroops(deployPoints)
-    if (!mainDeployDone) {
-        accountLog("夜世界：主用落点未把兵下出去，改用保底边缘点重试")
-    }
-    val deployDone = mainDeployDone || deployTroops(buildFallbackDeployPoints())
-    // 下兵轮询到此结束。按用户要求把轮询拆成两个：
-    //   · 下兵轮询 [deployTroops] —— 只管下兵，绝不碰技能；
-    //   · 技能轮询 [releaseSkillsLoop] —— 下兵完成后进入，只管放技能（英雄 + 各兵种部队技能）。
-    // 这样两者不会交错，也就不会出现"同一张卡被点两次 → 放技能 → 选卡丢失 → 下兵失败"。
-    if (deployDone) {
-        accountLog("夜世界：本轮下兵完成 → 进入技能轮询")
-        releaseSkillsLoop()
+    // 夜世界下兵方案分流：配置项 night_world_deploy_plan 为 1 时走当前方案（主世界几何+点选落点），
+    // 0/缺省 走源项目保真方案（函数123a/323a/128a：双指滑屏 + 动态边界扫描 + 技能轮询）。源方案优先。
+    val useSourcePlan = getConfigRuntime(Schema.BUILDER_BASE_SETTINGS.NIGHT_WORLD_DEPLOY_PLAN.key) != "1"
+    accountLog("夜世界：选用下兵方案 = ${if (useSourcePlan) "源方案(函数123a)" else "当前方案"}")
+    if (useSourcePlan) {
+        // 源项目夜世界下兵方案（优先）：内部完成下兵与技能轮询，回营交由后续共享逻辑处理。
+        builderBaseAttackSource()
     } else {
-        accountLog("夜世界：本轮未能下兵（可能存在无效落点），跳过技能轮询")
+        val mainDeployDone = deployTroops(deployPoints)
+        if (!mainDeployDone) {
+            accountLog("夜世界：主用落点未把兵下出去，改用保底边缘点重试")
+        }
+        val deployDone = mainDeployDone || deployTroops(buildFallbackDeployPoints())
+        // 下兵轮询到此结束。按用户要求把轮询拆成两个：
+        //   · 下兵轮询 [deployTroops] —— 只管下兵，绝不碰技能；
+        //   · 技能轮询 [releaseSkillsLoop] —— 下兵完成后进入，只管放技能（英雄 + 各兵种部队技能）。
+        // 这样两者不会交错，也就不会出现"同一张卡被点两次 → 放技能 → 选卡丢失 → 下兵失败"。
+        if (deployDone) {
+            accountLog("夜世界：本轮下兵完成 → 进入技能轮询")
+            releaseSkillsLoop()
+        } else {
+            accountLog("夜世界：本轮未能下兵（可能存在无效落点），跳过技能轮询")
+        }
     }
 }
 

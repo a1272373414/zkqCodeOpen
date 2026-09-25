@@ -98,6 +98,49 @@ suspend fun findMultiColors(
 }
 
 /**
+ * 在指定区域内查找所有匹配的颜色组合（对应源 lua 的 findMultiColorAll）。
+ * 通过不断把搜索区左边界右移到上一次命中点之后来枚举全部命中点。
+ * @param maxMatches 最多返回的匹配数，防止极端情况下死循环
+ */
+suspend fun findMultiColorsAll(
+    schema: ColorSchema,
+    maxMatches: Int = 20
+): List<Point> {
+    val resultAny = ScreenCaptureManager.capture(asBitmap = false)
+    val list = mutableListOf<Point>()
+    if (resultAny !is ScreenCaptureManager.CaptureResult) return emptyList()
+    val buf = resultAny.buffer
+    val w = resultAny.width
+    val h = resultAny.height
+    val stride = resultAny.rowStride
+    // 展平偏移量为 IntArray: [dx, dy, color, ...]
+    val flatOffsets = mutableListOf<Int>()
+    schema.offsets?.forEach {
+        if (it != null) {
+            flatOffsets.add(it.dx)
+            flatOffsets.add(it.dy)
+            flatOffsets.add(it.color)
+        }
+    }
+    val offsetsArray = flatOffsets.toIntArray()
+    var x1 = schema.x1
+    val x2 = schema.x2
+    repeat(maxMatches) {
+        val res = RustTools.findMultiColorsRaw(
+            buf, w, h, stride,
+            x1, schema.y1, x2, schema.y2,
+            schema.mainColor, schema.threshold, offsetsArray, schema.direction, 10
+        )
+        if (res == null || res.size != 2) return@repeat
+        list.add(Point(res[0], res[1]))
+        // 下一次从本次命中点右侧一格继续查找
+        x1 = res[0] + 1
+        if (x1 >= x2) return@repeat
+    }
+    return list
+}
+
+/**
  * Repeatedly calls findMultiColors for each schema until a match is found or the duration expires.
  * @param increment Forwarded to each findMultiColors call. Pass 1 for lightweight/polling callers,
  *                  use the default of 5 for all others.

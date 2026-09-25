@@ -7,6 +7,8 @@ import com.coc.zkqcode.jar.ui.schema.SettingDef
 object BuilderBaseSettings {
     val NO_BUILDER_BASE = SettingDef("no_builder_base", "不打夜世界", 0, "BUILDER_BASE_SETTINGS")
     val BUILDER_BASE_FARMING = SettingDef("builder_base_farming", "夜世界打资源", 1, "BUILDER_BASE_SETTINGS")
+    // 夜世界下兵方案：0/缺省=源项目保真方案（函数123a/323a/128a 移植），1=当前方案（主世界几何+点选落点）。源方案优先。
+    val NIGHT_WORLD_DEPLOY_PLAN = SettingDef("night_world_deploy_plan", "夜世界下兵方案(0=源方案,1=当前方案)", 0, "BUILDER_BASE_SETTINGS")
     val SWITCH_ACCOUNT_AFTER_BATTLES = SettingDef(
         "switch_account_after_battles", "每次对战以下局数后切号", 2, "BUILDER_BASE_SETTINGS"
     )
@@ -29,6 +31,7 @@ object BuilderBaseSettings {
     val all = listOf(
         NO_BUILDER_BASE,
         BUILDER_BASE_FARMING,
+        NIGHT_WORLD_DEPLOY_PLAN,
         SWITCH_ACCOUNT_AFTER_BATTLES,
         STOP_WHEN_RESOURCE_FULL,
         TROPHY_PUSHING_MODE,
