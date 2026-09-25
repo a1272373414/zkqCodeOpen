@@ -626,16 +626,22 @@ private suspend fun deployAndExit() {
 private suspend fun normalBattle(isNormal: Boolean = true) {
     pinchIn(141, 423, 1052, 352, 638, 365, duration = 200)
 
+    // 夜世界下兵方案提前读取：方案3 要求“不拖动地图、缩到最小”的固定镜头
+    // （地图边缘固定落点坐标才成立），因此方案3 跳过这里的随机侧滑。
+    val plan = getConfigRuntime(Schema.BUILDER_BASE_SETTINGS.NIGHT_WORLD_DEPLOY_PLAN.key)
+
     // 源四象限下兵几何：随机选一个象限用于滑屏视角。
     // 落点不再用"象限中点单点"——实机发现该点会压在基地建筑区(不可下兵区域)，
     // 改为四象限部署线上的多点候选，选卡后依次尝试（详见 [buildDeployPoints]）。
-    val side = (DeployGeometry.topSides + DeployGeometry.bottomSides).random()
-    if (side.isTop) {
-        swipe(981, 485, 0, 0, delayTime = 120)
-    } else {
-        swipe(100, 117, 1280, 720, delayTime = 120)
+    if (plan != "3") {
+        val side = (DeployGeometry.topSides + DeployGeometry.bottomSides).random()
+        if (side.isTop) {
+            swipe(981, 485, 0, 0, delayTime = 120)
+        } else {
+            swipe(100, 117, 1280, 720, delayTime = 120)
+        }
+        delayWithMultiplier(100)
     }
-    delayWithMultiplier(100)
     val deployPoints = buildDeployPoints()
 
     // 战争机器（夜世界王，单体英雄）：这里只用色特征记录卡槽坐标（释放技能时要靠它兜底，
@@ -656,16 +662,14 @@ private suspend fun normalBattle(isNormal: Boolean = true) {
     if (!isNormal) return
     // 先用主用下兵点（源四象限部署线，常规布局够用）；只有在整轮都没把兵下出去时
     // （例如对方基地铺满画面、只有边缘能下兵的少数布局），才启用保底边缘点再试一轮。
-    // 夜世界下兵方案分流：
-    //   0/缺省/2 → 方案2（源项目保真：函数123a/323a/128a）
+    // 夜世界下兵方案分流（默认方案3）：
+    //   0/缺省/3 → 方案3（卡位式：全卡位轮询 + 固定边缘落点 + 白框识别）
     //   1        → 当前方案（主世界几何+点选落点）
-    //   3        → 方案3（卡位式从左到右、白框识别、点落点4次）
-    val plan = getConfigRuntime(Schema.BUILDER_BASE_SETTINGS.NIGHT_WORLD_DEPLOY_PLAN.key)
+    //   2        → 方案2（源项目保真：函数123a/323a/128a）
     accountLog("夜世界：选用下兵方案 = ${when (plan) {
         "1" -> "当前方案"
         "2" -> "方案2(源保真)"
-        "3" -> "方案3(卡位式)"
-        else -> "源方案/缺省(方案2)"
+        else -> "方案3(卡位式,默认)"
     }}")
     when (plan) {
         "1" -> {
@@ -685,13 +689,13 @@ private suspend fun normalBattle(isNormal: Boolean = true) {
                 accountLog("夜世界：本轮未能下兵（可能存在无效落点），跳过技能轮询")
             }
         }
-        "3" -> {
-            // 方案3内部已完成下兵+技能轮询
-            builderBaseAttackSource3()
+        "2" -> {
+            // 方案2（源项目保真方案）：内部完成下兵与技能轮询
+            builderBaseAttackSource()
         }
         else -> {
-            // 0/2/缺省 都走方案2（源项目保真方案）
-            builderBaseAttackSource()
+            // 0/3/缺省 都走方案3（默认）
+            builderBaseAttackSource3()
         }
     }
 }

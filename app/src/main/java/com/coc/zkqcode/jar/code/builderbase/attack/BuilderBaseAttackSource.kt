@@ -5,6 +5,7 @@ import com.coc.zkqcode.core.system.screencapture.ScreenCaptureManager
 import com.coc.zkqcode.core.util.basic.ShowMessage
 import com.coc.zkqcode.core.util.touchactions.TouchActions
 import com.coc.zkqcode.jar.code.colorschema.ColorSchema
+import com.coc.zkqcode.jar.code.colorschema.MyColors
 import com.coc.zkqcode.jar.code.colorschema.colorpackage.builderbase.BuilderBaseAttackColors
 import com.coc.zkqcode.jar.code.universal.colors.countColorsInRegionSource
 import com.coc.zkqcode.jar.code.universal.colors.findMultiColors
@@ -45,13 +46,29 @@ private const val HERO_MAX_ROUNDS = 3
 // 部署栏物理卡位中心 x（横屏 1280×720）。坐标实测自
 // I:\coc\游戏截图\夜世界-英雄充能\夜世界-1已死亡-2已放技能-3未放技能-4选中-5未选中未下.jpg：
 // 托盘共 11 个卡位：卡位0=英雄，卡位1~10=兵（夜世界每个单位独占一张卡），
-// 未用到的卡位显示为虚线空框（点击无反应、无白框）。
+// 未用到的卡位显示为虚线空框（点击无反应、无白框）。方案3 每轮探测全部 11 个，
+// 空位/灰卡自动跳过，无需区分第一/第二区域。
 private val TRAY_SLOT_XS = intArrayOf(128, 243, 345, 447, 549, 651, 753, 855, 957, 1059, 1161)
 private const val SLOT_CENTER_Y = 645
 
-// 第一区域（第一场）：1英雄+6兵 → 用卡位0~6；第二区域（第二场）：1英雄+8兵 → 用卡位0~8
-private const val AREA1_SLOT_COUNT = 7
-private const val AREA2_SLOT_COUNT = 9
+// 方案3 固定边缘落点带（横屏 1280×720，原始战斗截图 c_05/c_20 实测）。
+// 开战时地图即为最远视野且方案3 不拖动相机，地图边缘一圈矩形条区域必定可下兵（用户确认）。
+// 落点是否真正有效由“下放后白框是否消失”实时判定：无效拉黑、有效记入点池。
+private val EDGE_DEPLOY_POINTS = listOf(
+    Point(498, 142), Point(640, 125), Point(782, 142),    // 上边
+    Point(237, 391), Point(249, 344), Point(261, 438),    // 左边
+    Point(1031, 391), Point(1037, 344), Point(1019, 438), // 右边
+    Point(391, 527), Point(616, 539), Point(853, 527)     // 下边
+)
+
+// 顶部中央横幅白字检测区域（横屏坐标，原始截图实测）：下兵前显示“开战倒计时：xx秒”，
+// 下兵后变为“离战斗结束还有：xx”，均为白字；倒计时快结束时红白闪烁（红色为瞬时状态）。
+// 横幅在战斗全程常驻 → 以白字作为“战斗画面在前台”的标志（主界面同区域仅 ~330，阈值 500）。
+private const val BANNER_X1 = 573
+private const val BANNER_Y1 = 40
+private const val BANNER_X2 = 710
+private const val BANNER_Y2 = 74
+private const val BANNER_WHITE_MIN = 500
 
 // 白框检测：卡被选中时整卡“弹出放大”，白色描边出现在卡片左右外沿的窄带内；
 // 卡内图案高光、灰卡(已下场)动画、英雄卡动画都进不了这两条窄带。
@@ -65,13 +82,8 @@ private const val WHITE_BAND_INNER = 42    // 窄带内沿距卡中心 x
 private const val WHITE_BAND_Y_TOP = 40    // 窄带上沿距卡中心 y（对应 605）
 private const val WHITE_BAND_Y_BOTTOM = 55 // 窄带下沿距卡中心 y（对应 700）
 
-// 每个落点点击次数、最大轮次
-private const val SOURCE3_TAPS_PER_POINT = 4
+// 方案3 下兵轮询的最大轮次
 private const val SOURCE3_MAX_ROUNDS = 6
-
-// 方案3 区域计数：每进程第1次调用=第一区域（6兵），第2次=第二区域（8兵）。
-// （与 realAttack 中“已进入第二区域”对应，每场夜世界对战会触发两次 normalBattle。）
-private var source3AreaCallCount = 0
 
 // 源竖屏宽（= 横屏高）
 private const val SRC_W = 720
@@ -139,30 +151,23 @@ suspend fun builderBaseAttackSource(): Boolean {
 }
 
 /**
- * 入口：夜世界下兵方案3（卡位式从左到右、点卡位+点落点4次、白框识别判已下、最多6轮、落点无效换点）。
- * 复用方案2的方向/边界扫描/几何；下兵逻辑改为固定卡位轮询。
+ * 入口：夜世界下兵方案3（卡位式从左到右、滑动式连点下兵、白框识别判已下与落点有效性、最多6轮）。
+ * 前提：normalBattle 已把地图缩到最小，且方案3 跳过了相机侧滑（不拖动地图）——
+ * 此时地图边缘一圈矩形条区域必定可下兵且屏幕坐标固定（EDGE_DEPLOY_POINTS，原始截图实测）。
+ * 顶部横幅文字：下兵前为“开战倒计时：xx秒”（白字，快结束红白闪烁），下兵后变为
+ * “离战斗结束还有：xx”——以横幅白字作为“战斗画面在前台”的标志。
+ * 检测到“回营”按钮 = 战斗结束，立即结束所有战斗相关循环。
  */
 suspend fun builderBaseAttackSource3(): Boolean {
-    ShowMessage.run("夜世界方案3：进入卡位式下兵流程")
-    if (!prepareSourceGeometry()) {
-        ShowMessage.run("夜世界方案3：几何准备失败，终止本场")
-        return false
-    }
+    ShowMessage.run("夜世界方案3：进入卡位式下兵流程（固定边缘落点）")
 
-    source3AreaCallCount++
-    val isFirstArea = source3AreaCallCount % 2 == 1
-    val slotCount = if (isFirstArea) AREA1_SLOT_COUNT else AREA2_SLOT_COUNT
-    // 物理托盘固定 11 个卡位，区域只决定使用前几个（其余为虚线空位）
-    val slotXs = TRAY_SLOT_XS.copyOf(slotCount)
-    val areaName = if (isFirstArea) "第一区域(1英雄+6兵)" else "第二区域(1英雄+8兵)"
-    ShowMessage.run("夜世界方案3：当前为 $areaName，使用卡位0~${slotCount - 1} 共 $slotCount 个")
+    // 1. 等待战斗画面（顶部横幅白字：开战倒计时 / 离战斗结束还有）；未等到也继续（交给回营检测兜底）
+    val seenBanner = waitForBattleBanner()
+    ShowMessage.run("夜世界方案3：战斗横幅${if (seenBanner) "已出现，开始下兵" else "未检测到（可能已过期），直接继续"}")
 
-    val deployCandidates = buildDeployCandidates()
-    ShowMessage.run("夜世界方案3：候选落点 ${deployCandidates.size} 个")
-
-    // 每卡位轮询状态：上一轮是否有白框（连续两轮有白框=上轮没下出去→换落点）、下一个候选落点下标
-    val prevBorder = BooleanArray(slotCount)
-    val nextCandidate = IntArray(slotCount)
+    // 2. 轮询全部 11 个物理卡位（空位/灰卡白框=0 自动跳过，无需区分第一/第二区域）
+    val invalidPoints = mutableSetOf<Point>()     // 落点黑名单：下放后白框仍在 = 该点无效
+    val validatedPoints = mutableListOf<Point>()  // 有效点池：下放成功（白框消失）的落点，供保底复用
 
     var round = 0
     while (round < SOURCE3_MAX_ROUNDS) {
@@ -170,41 +175,94 @@ suspend fun builderBaseAttackSource3(): Boolean {
         ShowMessage.run("夜世界方案3：第 ${round}/${SOURCE3_MAX_ROUNDS} 轮下兵开始")
 
         var allDone = true
-        val curBorder = BooleanArray(slotCount)
-
-        for ((index, x) in slotXs.withIndex()) {
-            // 每轮都重新点全部卡位检测白框：无白框=已下完/空位；有白框=仍有兵可下。
+        for ((index, cx) in TRAY_SLOT_XS.withIndex()) {
+            // 每轮都重新点全部卡位检测白框：无白框=已下完/空位/未选中；有白框=仍有兵可下。
             // 不做“一次无白框就永久跳过”，避免点偏/动画未稳导致漏下（漏了下轮还能补）。
-            val hasBorder = tapAndCheckWhiteBorder(x, SLOT_CENTER_Y)
-            curBorder[index] = hasBorder
-            if (!hasBorder) continue
+            TouchActions.tap(cx, SLOT_CENTER_Y)
+            delay(250L)
+            val cap = ScreenCaptureManager.capture(false) as? ScreenCaptureManager.CaptureResult
+                ?: continue
+            // 检测到回营按钮 = 战斗结束：立即结束所有战斗相关循环（不再下兵/保底/技能）
+            if (findMultiColors(byteBuffer = cap, schema = MyColors.BuilderBackToCamp) != null) {
+                ShowMessage.run("夜世界方案3：检测到回营按钮，战斗已结束，终止所有战斗相关循环")
+                return false
+            }
+            val ring = countWhiteFrameEdge(cap, cx, SLOT_CENTER_Y, WHITE_BRIGHT_THRESHOLD)
+            ShowMessage.run("夜世界方案3：卡位$index($cx) 白框边缘像素数=$ring")
+            if (ring < WHITE_BORDER_MIN_COUNT) continue
             allDone = false
 
-            // 有白框 → 选中成功；若上一轮该卡位也有白框，说明上一轮没下出去，本轮换落点
-            if (prevBorder[index]) {
-                ShowMessage.run("夜世界方案3：卡位$index 连续两轮可选中（上轮未下出），更换落点重试")
+            // 有白框 → 已选中，在落点做“滑动式连点”下兵（连点不会触发缩放，用户实测）
+            val point = pickEdgePoint(index, round, invalidPoints, validatedPoints)
+            if (point == null) {
+                ShowMessage.run("夜世界方案3：卡位$index 无可用落点（边缘点全部拉黑），重置黑名单后重试")
+                invalidPoints.clear()
+                continue
             }
-            val point = deployCandidates[nextCandidate[index] % deployCandidates.size]
-            nextCandidate[index]++
-            ShowMessage.run("夜世界方案3：卡位$index($x) 选中，使用落点 #${nextCandidate[index]} (${point.x},${point.y})")
+            ShowMessage.run("夜世界方案3：卡位$index 选中，连点下兵 → (${point.x},${point.y})")
+            tapDeployLine(point)
 
-            // 在该落点连续点击 4 次
-            repeat(SOURCE3_TAPS_PER_POINT) {
-                TouchActions.tap(point.x, point.y)
-                delay(120L)
+            // 落点有效性检测：白框消失 = 卡片被消耗 = 下放成功；白框仍在 = 落点无效，拉黑
+            delay(600L)
+            val cap2 = ScreenCaptureManager.capture(false) as? ScreenCaptureManager.CaptureResult
+                ?: continue
+            if (findMultiColors(byteBuffer = cap2, schema = MyColors.BuilderBackToCamp) != null) {
+                ShowMessage.run("夜世界方案3：检测到回营按钮，战斗已结束，终止所有战斗相关循环")
+                return false
             }
-            delay(200L)
+            val ring2 = countWhiteFrameEdge(cap2, cx, SLOT_CENTER_Y, WHITE_BRIGHT_THRESHOLD)
+            if (ring2 < WHITE_BORDER_MIN_COUNT) {
+                if (point !in validatedPoints) validatedPoints.add(point)
+                ShowMessage.run("夜世界方案3：卡位$index 下放成功（白框消失），落点(${point.x},${point.y}) 记入有效点池（池=${validatedPoints.size}）")
+            } else {
+                invalidPoints.add(point)
+                ShowMessage.run("夜世界方案3：卡位$index 白框仍在，落点(${point.x},${point.y}) 无效，已拉黑（黑名单=${invalidPoints.size}）")
+            }
         }
-
-        // 记录本轮各卡位白框状态，供下一轮对比“状态是否变化”
-        curBorder.copyInto(prevBorder)
 
         if (allDone) {
             ShowMessage.run("夜世界方案3：本轮全部卡位均无白框（已下完/空位），下兵完成")
             break
         }
         // 给游戏下兵动画留时间，再进入下一轮
-        delay(800L)
+        delay(600L)
+    }
+
+    // 3. 保底：常规轮次后仍可选中的卡位 → “点卡选中 → 滑动式连点下兵”。
+    //    落点只用有效点池（全部成功落点都在池里）；池为空时用未拉黑的边缘点；绝不用已知无效点。
+    var fallbackUsed = 0
+    for ((index, cx) in TRAY_SLOT_XS.withIndex()) {
+        TouchActions.tap(cx, SLOT_CENTER_Y)
+        delay(250L)
+        val cap = ScreenCaptureManager.capture(false) as? ScreenCaptureManager.CaptureResult
+            ?: continue
+        if (findMultiColors(byteBuffer = cap, schema = MyColors.BuilderBackToCamp) != null) {
+            ShowMessage.run("夜世界方案3：检测到回营按钮，战斗已结束，终止所有战斗相关循环")
+            return false
+        }
+        var ring = countWhiteFrameEdge(cap, cx, SLOT_CENTER_Y, WHITE_BRIGHT_THRESHOLD)
+        if (ring < WHITE_BORDER_MIN_COUNT) {
+            // 可能恰好把残留的选中点取消了，再点一次确认
+            TouchActions.tap(cx, SLOT_CENTER_Y)
+            delay(250L)
+            ring = whiteFrameCountNow(cx, SLOT_CENTER_Y)
+        }
+        if (ring < WHITE_BORDER_MIN_COUNT) continue
+        val fallbackPoint = validatedPoints.lastOrNull()
+            ?: EDGE_DEPLOY_POINTS.firstOrNull { it !in invalidPoints }
+        if (fallbackPoint == null) {
+            ShowMessage.run("夜世界方案3：保底：卡位$index 可选中但没有可用落点（点池空且边缘点全拉黑），跳过")
+            continue
+        }
+        ShowMessage.run("夜世界方案3：保底：卡位$index 仍可选中，连点下兵 → (${fallbackPoint.x},${fallbackPoint.y})")
+        tapDeployLine(fallbackPoint)
+        fallbackUsed++
+        delay(200L)
+    }
+    if (fallbackUsed == 0) {
+        ShowMessage.run("夜世界方案3：无残留可下卡位（或无可用落点），无需保底")
+    } else {
+        ShowMessage.run("夜世界方案3：保底连点下兵完成，共 $fallbackUsed 个卡位")
     }
 
     ShowMessage.run("夜世界方案3：下兵完成，进入技能轮询")
@@ -214,17 +272,75 @@ suspend fun builderBaseAttackSource3(): Boolean {
 }
 
 /**
- * 点击卡位后检测是否出现白色选中边框。
- * 返回 true = 白框出现（卡位仍有兵/英雄，可下）；false = 无白框（已下完/空位/灰卡）。
+ * 等待战斗画面顶部横幅白字出现（“开战倒计时：xx秒”或“离战斗结束还有：xx”）。
+ * 横幅在战斗全程常驻；倒计时快结束时文字红白闪烁（红色为瞬时状态，白字检测不受影响）。
  */
-private suspend fun tapAndCheckWhiteBorder(cx: Int, cy: Int): Boolean {
-    TouchActions.tap(cx, cy)
-    delay(250L)  // 等选中动画/白框稳定
-    val cap = ScreenCaptureManager.capture(false) as? ScreenCaptureManager.CaptureResult
-        ?: return false
-    val count = countWhiteFrameEdge(cap, cx, cy, WHITE_BRIGHT_THRESHOLD)
-    ShowMessage.run("夜世界方案3：卡位(${cx},${cy}) 白框边缘像素数=$count")
-    return count >= WHITE_BORDER_MIN_COUNT
+private suspend fun waitForBattleBanner(maxChecks: Int = 12): Boolean {
+    repeat(maxChecks) {
+        val cap = ScreenCaptureManager.capture(false) as? ScreenCaptureManager.CaptureResult
+        if (cap != null && countWhitePixels(cap, BANNER_X1, BANNER_Y1, BANNER_X2, BANNER_Y2) >= BANNER_WHITE_MIN) {
+            return true
+        }
+        delay(500L)
+    }
+    return false
+}
+
+/** 统计区域内近白（R/G/B 均 >= 224）像素数。坐标为横屏坐标。 */
+private fun countWhitePixels(
+    cap: ScreenCaptureManager.CaptureResult,
+    x1: Int, y1: Int, x2: Int, y2: Int
+): Int {
+    val w = cap.width
+    val h = cap.height
+    val buf = cap.buffer
+    val stride = cap.rowStride
+    var count = 0
+    for (y in y1.coerceIn(0, h - 1)..y2.coerceIn(0, h - 1)) {
+        for (x in x1.coerceIn(0, w - 1)..x2.coerceIn(0, w - 1)) {
+            val o = y * stride + x * 4
+            val b = buf.get(o).toInt() and 0xFF
+            val g = buf.get(o + 1).toInt() and 0xFF
+            val r = buf.get(o + 2).toInt() and 0xFF
+            if (r >= 224 && g >= 224 && b >= 224) count++
+        }
+    }
+    return count
+}
+
+/** 截图并统计指定卡位的白框边缘像素数（不点击）。截图失败返回 0。 */
+private suspend fun whiteFrameCountNow(cx: Int, cy: Int): Int {
+    val cap = ScreenCaptureManager.capture(false) as? ScreenCaptureManager.CaptureResult ?: return 0
+    return countWhiteFrameEdge(cap, cx, cy, WHITE_BRIGHT_THRESHOLD)
+}
+
+/**
+ * 为卡位挑选边缘落点：以（卡位下标+轮次）为起点在 EDGE_DEPLOY_POINTS 中轮转，
+ * 跳过已拉黑的点，使各卡位/各轮落点分散；边缘点全部拉黑则退回有效点池。
+ */
+private fun pickEdgePoint(
+    slotIndex: Int, round: Int,
+    invalidPoints: Set<Point>, validatedPoints: List<Point>
+): Point? {
+    val n = EDGE_DEPLOY_POINTS.size
+    for (k in 0 until n) {
+        val p = EDGE_DEPLOY_POINTS[(slotIndex + round + k) % n]
+        if (p !in invalidPoints) return p
+    }
+    return validatedPoints.lastOrNull()
+}
+
+/**
+ * 滑动式连点下兵：卡已选中的前提下，在落点处沿短线上逐点连点 4 次（类似滑动撒兵）。
+ * 用户实测：连点不会触发缩放。落点无效时连点无副作用（不拖动相机）。
+ */
+private suspend fun tapDeployLine(p: Point) {
+    val dir = if (Random().nextBoolean()) 1 else -1
+    repeat(4) { i ->
+        TouchActions.tap(p.x + dir * i * 18, p.y + if (i % 2 == 0) 0 else 8)
+        delay(110L)
+    }
+    delay(150L)
 }
 
 /**
@@ -273,28 +389,8 @@ private fun countWhiteFrameEdge(
 }
 
 /**
- * 由当前四向几何构建候选落点列表（实屏坐标）：四象限中点 + 女巫外围中点。
- * 每个卡位按顺序循环使用，落点无效时自动换下一个。
- */
-private fun buildDeployCandidates(): List<Point> {
-    val list = mutableListOf<Point>()
-    fun addQuad(q: Quad) {
-        list.add(Point(toRealX(q.midX, q.midY).toInt(), toRealY(q.midX, q.midY).toInt()))
-    }
-    addQuad(ltQuad)
-    addQuad(rtQuad)
-    addQuad(lbQuad)
-    addQuad(rbQuad)
-    addQuad(ltOuter)
-    addQuad(rtOuter)
-    addQuad(lbOuter)
-    addQuad(rbOuter)
-    return list
-}
-
-/**
  * 复用部分：随机选方向 + 动态边界扫描 + 构建四向几何（含夹取）。
- * 方案2（deployTroopsSource）与方案3（builderBaseAttackSource3）共用。
+ * 方案2（deployTroopsSource）专用；方案3 不做边界扫描/不拖动相机（保持固定镜头）。
  */
 private suspend fun prepareSourceGeometry(): Boolean {
     // 随机选一个方向作为蛮王位置（左上/右上/左下/右下）
@@ -411,7 +507,7 @@ private suspend fun deployTroopsSource(): Boolean {
     } else if (heroFallbackPoint != null) {
         ShowMessage.run("夜世界源方案：常规 ${maxRounds} 轮后仍有 ${genuineLeft.size} 个兵种从未下，启用了英雄成功落点保底（复用英雄“点卡槽+单指拖到落点”手势）")
         for ((spec, c) in genuineLeft) {
-            dragDeployTroop(spec, c, heroFallbackPoint)
+            dragDeployTroop(spec.name, c, heroFallbackPoint)
             delay(150L)
         }
         val leftFinal = recognizeTroops(troops).filter { it.first.name !in deployedNames }
@@ -577,9 +673,9 @@ private suspend fun recognizeTroops(troops: List<TroopSpec>): List<Pair<TroopSpe
     }
 }
 
-/** 保底下兵：单指从卡槽拖到英雄成功落点（COC 标准放兵手势，比双指滑屏/双击更稳），在已验证有效的落点处放兵。 */
-private suspend fun dragDeployTroop(spec: TroopSpec, card: Point, realPoint: Point) {
-    ShowMessage.run("夜世界源方案：保底拖放下兵种[${spec.name}] 卡槽(${card.x},${card.y}) → 落点(${realPoint.x},${realPoint.y})")
+/** 保底下兵：单指从卡槽拖到有效落点（COC 标准放兵手势，比双指滑屏/双击更稳）。方案2/方案3 的保底共用。 */
+private suspend fun dragDeployTroop(label: String, card: Point, realPoint: Point) {
+    ShowMessage.run("夜世界源方案：保底拖放[$label] 卡槽(${card.x},${card.y}) → 落点(${realPoint.x},${realPoint.y})")
     // 点卡选中 → 单指从卡位拖到落点 → 松手即下场
     TouchActions.tap(card.x, card.y)
     delay(300L)
