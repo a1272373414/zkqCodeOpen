@@ -182,11 +182,8 @@ suspend fun builderBaseAttackSource3(): Boolean {
             delay(250L)
             val cap = ScreenCaptureManager.capture(false) as? ScreenCaptureManager.CaptureResult
                 ?: continue
-            // 检测到回营按钮 = 战斗结束：立即结束所有战斗相关循环（不再下兵/保底/技能）
-            if (findMultiColors(byteBuffer = cap, schema = MyColors.BuilderBackToCamp) != null) {
-                ShowMessage.run("夜世界方案3：检测到回营按钮，战斗已结束，终止所有战斗相关循环")
-                return false
-            }
+            // 检测到回营按钮 = 战斗已结束 → 立即终止所有战斗相关循环（不再下兵/保底/技能）
+            if (checkBattleEnd(cap)) return false
             val ring = countWhiteFrameEdge(cap, cx, SLOT_CENTER_Y, WHITE_BRIGHT_THRESHOLD)
             ShowMessage.run("夜世界方案3：卡位$index($cx) 白框边缘像素数=$ring")
             if (ring < WHITE_BORDER_MIN_COUNT) continue
@@ -206,10 +203,7 @@ suspend fun builderBaseAttackSource3(): Boolean {
             delay(600L)
             val cap2 = ScreenCaptureManager.capture(false) as? ScreenCaptureManager.CaptureResult
                 ?: continue
-            if (findMultiColors(byteBuffer = cap2, schema = MyColors.BuilderBackToCamp) != null) {
-                ShowMessage.run("夜世界方案3：检测到回营按钮，战斗已结束，终止所有战斗相关循环")
-                return false
-            }
+            if (checkBattleEnd(cap2)) return false
             val ring2 = countWhiteFrameEdge(cap2, cx, SLOT_CENTER_Y, WHITE_BRIGHT_THRESHOLD)
             if (ring2 < WHITE_BORDER_MIN_COUNT) {
                 if (point !in validatedPoints) validatedPoints.add(point)
@@ -236,10 +230,7 @@ suspend fun builderBaseAttackSource3(): Boolean {
         delay(250L)
         val cap = ScreenCaptureManager.capture(false) as? ScreenCaptureManager.CaptureResult
             ?: continue
-        if (findMultiColors(byteBuffer = cap, schema = MyColors.BuilderBackToCamp) != null) {
-            ShowMessage.run("夜世界方案3：检测到回营按钮，战斗已结束，终止所有战斗相关循环")
-            return false
-        }
+        if (checkBattleEnd(cap)) return false
         var ring = countWhiteFrameEdge(cap, cx, SLOT_CENTER_Y, WHITE_BRIGHT_THRESHOLD)
         if (ring < WHITE_BORDER_MIN_COUNT) {
             // 可能恰好把残留的选中点取消了，再点一次确认
@@ -282,6 +273,27 @@ private suspend fun waitForBattleBanner(maxChecks: Int = 12): Boolean {
             return true
         }
         delay(500L)
+    }
+    return false
+}
+
+/**
+ * 战斗界面判断：是否应结束所有战斗相关循环。
+ * ① 检测到“回营”按钮 → 战斗已结束；
+ * ② 顶部横幅（“开战倒计时：xx秒” / “离战斗结束还有：xx”）白字缺失 → 没有倒计时，就不是战斗界面
+ *    （可能已回营、在主界面或弹了其他界面）。为避免倒计时红白闪烁的单帧误判，缺失时再确认一次。
+ */
+private suspend fun checkBattleEnd(cap: ScreenCaptureManager.CaptureResult): Boolean {
+    if (findMultiColors(byteBuffer = cap, schema = MyColors.BuilderBackToCamp) != null) {
+        ShowMessage.run("夜世界方案3：检测到回营按钮，战斗已结束，终止所有战斗相关循环")
+        return true
+    }
+    if (countWhitePixels(cap, BANNER_X1, BANNER_Y1, BANNER_X2, BANNER_Y2) >= BANNER_WHITE_MIN) return false
+    delay(300L)
+    val cap2 = ScreenCaptureManager.capture(false) as? ScreenCaptureManager.CaptureResult ?: return false
+    if (countWhitePixels(cap2, BANNER_X1, BANNER_Y1, BANNER_X2, BANNER_Y2) < BANNER_WHITE_MIN) {
+        ShowMessage.run("夜世界方案3：未检测到战斗倒计时横幅（不在战斗界面），终止所有战斗相关循环")
+        return true
     }
     return false
 }
