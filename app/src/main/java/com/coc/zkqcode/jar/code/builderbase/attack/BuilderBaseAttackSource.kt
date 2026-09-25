@@ -35,6 +35,9 @@ private const val XY_RATIO = 1.334
 // 双指滑屏循环次数（源 cishu = 2）
 private const val CISHU = 2
 
+// 英雄（第一区域）单英雄下放的最大重试轮次：每轮换方向重建几何换落点
+private const val HERO_MAX_ROUNDS = 3
+
 // 源竖屏宽（= 横屏高）
 private const val SRC_W = 720
 
@@ -112,20 +115,8 @@ private suspend fun deployTroopsSource(): Boolean {
     }
     ShowMessage.run("夜世界源方案：随机蛮王位置 = $direction")
 
-    // 2. 默认四向 开始/结束（源硬编码，竖屏坐标）
-    var ltStartX = 446; var ltStartY = 535
-    var rtStartX = 453; var rtStartY = 723
-    var lbStartX = 449; var lbStartY = 268
-    var rbStartX = 460; var rbStartY = 1035
-    var ltEndX = 244; var ltEndY = 266
-    var rtEndX = 232; var rtEndY = 1026
-    var lbEndX = 236; var lbEndY = 549
-    var rbEndX = 233; var rbEndY = 729
-
-    if (SECOND_VILLAGE) {
-        // 第二村庄：不扫描，直接用上面硬编码几何
-        ShowMessage.run("夜世界源方案：第二村庄模式，跳过边界扫描，使用硬编码几何")
-    } else {
+    // 2. 动态边界扫描（第二村庄用硬编码几何），得到走行；具体四向几何 + 方向修正 + 夹取 + 构建 quads 由 applyDirectionGeometry 完成（便于重试时换方向）
+    if (!SECOND_VILLAGE) {
         ShowMessage.run("夜世界源方案：开始动态边界扫描，色系=${if (altBoundaryScan) "2973C2" else "4053AE"}")
         if (altBoundaryScan) {
             // 函数132a → 函数129a（左上/右上）→ 函数130a（左下/右下）→ 函数131a
@@ -141,57 +132,14 @@ private suspend fun deployTroopsSource(): Boolean {
             cameraSwipeUp()
             scanUpper()
         }
-        // 用走行重算 开始/结束（源 15886~15901）
-        ltStartX = 518 - walkRT
-        ltStartY = (640 - walkRT * XY_RATIO).toInt()
-        rtStartX = 518 - walkLT
-        rtStartY = (640 + walkLT * XY_RATIO).toInt()
-        lbStartX = 526 - walkLT
-        lbStartY = (155 + walkLT * XY_RATIO).toInt()
-        rbStartX = 526 - walkRT
-        rbStartY = (1128 - walkRT * XY_RATIO).toInt()
-        ltEndX = 157 + walkLB
-        ltEndY = (155 + walkLB * XY_RATIO).toInt()
-        rtEndX = 157 + walkRB
-        rtEndY = (1128 - walkRB * XY_RATIO).toInt()
-        lbEndX = 165 + walkRB
-        lbEndY = (640 - walkRB * XY_RATIO).toInt()
-        rbEndX = 165 + walkLT
-        rbEndY = (640 + walkLT * XY_RATIO).toInt()
-        // +21 基础偏移（源 15902~15909）
-        ltStartX += 21; rtStartX += 21; lbStartX += 21; rbStartX += 21
-        ltEndX += 21; rtEndX += 21; lbEndX += 21; rbEndX += 21
-        // 方向相关 + 走行*XY*0.5 修正（源 15910~15917）
-        when (direction) {
-            "左上" -> ltStartY += (walkLT * XY_RATIO * 0.5).toInt()
-            "右上" -> rtStartY += (walkRT * XY_RATIO * 0.5).toInt()
-            "左下" -> lbStartY += (walkLB * XY_RATIO * 0.5).toInt()
-            "右下" -> rbStartY += (walkRB * XY_RATIO * 0.5).toInt()
-        }
-        ltEndY += (walkLT * XY_RATIO * 0.5).toInt()
-        rtEndY += (walkRT * XY_RATIO * 0.5).toInt()
-        lbEndY += (walkLB * XY_RATIO * 0.5).toInt()
-        rbEndY += (walkRB * XY_RATIO * 0.5).toInt()
+    } else {
+        ShowMessage.run("夜世界源方案：第二村庄模式，跳过边界扫描，使用硬编码几何")
     }
+    applyDirectionGeometry(direction)
 
-    ShowMessage.run("夜世界源方案几何：走行LT=$walkLT RT=$walkRT LB=$walkLB RB=$walkRB | 左上($ltStartX,$ltStartY)-($ltEndX,$ltEndY) 右上($rtStartX,$rtStartY)-($rtEndX,$rtEndY) 左下($lbStartX,$lbStartY)-($lbEndX,$lbEndY) 右下($rbStartX,$rbStartY)-($rbEndX,$rbEndY)")
-
-    // 3. 由 开始/结束 派生 中间 与 外围（女巫专用，源 15860~15879）
-    ltQuad = Quad(ltStartX, ltStartY, ltEndX, ltEndY)
-    rtQuad = Quad(rtStartX, rtStartY, rtEndX, rtEndY)
-    lbQuad = Quad(lbStartX, lbStartY, lbEndX, lbEndY)
-    rbQuad = Quad(rbStartX, rbStartY, rbEndX, rbEndY)
-    // 外围：复制开始/结束
-    ltOuter = Quad(ltStartX, ltStartY, ltEndX, ltEndY)
-    rtOuter = Quad(rtStartX, rtStartY, rtEndX, rtEndY)
-    lbOuter = Quad(lbStartX, lbStartY, lbEndX, lbEndY)
-    rbOuter = Quad(rbStartX, rbStartY, rbEndX, rbEndY)
-
-    // 4. 英雄下放（函数123a：先检测王/夜飞机卡槽，点下）
-    dropHero(BuilderBaseAttackColors.BuilderBaseMachine, "王")
-    dropHero(BuilderBaseAttackColors.BuilderBaseBattleCopter, "夜飞机")
-
-    // 5. 兵种识别并逐一下兵（源 15997~16071，顺序与源一致）
+    // ───────────────── 第一区域(英雄)与第二区域(兵)合并轮次：识别 → 第1轮顺带下英雄 → 下本轮回溯到的新兵种 ─────────────────
+    // 英雄在第 1 轮“识别之后”下放（与源方案一致：识别→下英雄→下兵，英雄与兵间隔最短），
+    // 每下完一个英雄立即回扫卡槽判断是否真的下场，失败则换方向重试，并记录其成功落点作保底。
     val troops = listOf(
         TroopSpec("皮卡", BuilderBaseAttackColors.BuilderBasePekka, false, false),
         TroopSpec("巨人", BuilderBaseAttackColors.BuilderBaseGiant, false, false),
@@ -206,12 +154,146 @@ private suspend fun deployTroopsSource(): Boolean {
         TroopSpec("法师", BuilderBaseAttackColors.BuilderBaseWizard, false, false),
         TroopSpec("女巫", BuilderBaseAttackColors.NightWitch, true, true),
     )
-    for (spec in troops) {
-        deployTroop(spec)
-        delay(150L)
+
+    // 已成功下发过的兵种名集合：女巫等兵种下场后卡槽常不消失（残留），若每轮都重新识别到就会
+    // 被误判为“未下成功”而重复下/乱换方向。一旦下发过即视为已下场，后续轮次不再重复下。
+    val deployedNames = mutableSetOf<String>()
+    var heroFallbackPoint: Point? = null
+    var prevNames: List<String>? = null
+    val maxRounds = 3
+    var round = 0
+    while (true) {
+        round++
+        // 识别兵种（扫描全部卡槽，记录命中的兵种）
+        val available = recognizeTroops(troops)
+        val names = available.map { it.first.name }.sorted()
+        ShowMessage.run("夜世界源方案：第${round}轮 识别兵种完成，命中 ${available.size} 个可下兵种")
+
+        // 本轮新出现且从未下发过的兵种（需要真正去下）
+        val newOnes = available.filter { it.first.name !in deployedNames }
+        // 识别集合与上一轮完全相同且没有任何新兵种要下 → 这些卡槽是“已下场但残留”，停止重试避免重复下/乱换方向
+        if (prevNames != null && names == prevNames && newOnes.isEmpty()) {
+            ShowMessage.run("夜世界源方案：第${round}轮 识别结果与上一轮完全相同且均已下场（卡槽残留），不再重复下兵")
+            break
+        }
+        prevNames = names
+
+        // 第一区域：第 1 轮顺带下英雄（识别之后），带成功检测与落点记录
+        if (round == 1) {
+            heroFallbackPoint = deployHeroSource()
+        }
+
+        if (available.isEmpty()) {
+            ShowMessage.run("夜世界源方案：无可下兵种，结束下兵流程")
+            break
+        }
+
+        // 第二区域：只下“本轮新识别且尚未下发过”的兵种（已下发过但卡槽残留的跳过，避免重复下）
+        for ((spec, c) in available) {
+            if (spec.name in deployedNames) continue
+            deployTroop(spec, c)
+            deployedNames.add(spec.name)
+            delay(150L)
+        }
+
+        if (round >= maxRounds) {
+            ShowMessage.run("夜世界源方案：达到最大下兵轮次 $maxRounds，结束常规下兵流程")
+            break
+        }
+        // 下一轮重新识别，用于确认卡槽是否真消失（已下发过的不会被重复下）
     }
+
+    // ───────────────── 保底：常规轮次后“从未下发过”的残留兵种，用英雄成功落点兜底 ─────────────────
+    // 已下发过但卡槽仍残留的（女巫等已下场但卡槽不消失）视为已下，不再重复下。
+    val leftAfterRounds = recognizeTroops(troops)
+    val genuineLeft = leftAfterRounds.filter { it.first.name !in deployedNames }
+    if (genuineLeft.isEmpty()) {
+        ShowMessage.run("夜世界源方案：常规下兵已全部消耗（或已下场卡槽残留），无需保底")
+    } else if (heroFallbackPoint != null) {
+        ShowMessage.run("夜世界源方案：常规 ${maxRounds} 轮后仍有 ${genuineLeft.size} 个兵种从未下，启用了英雄成功落点保底（复用英雄“点卡槽+单指拖到落点”手势）")
+        for ((spec, c) in genuineLeft) {
+            dragDeployTroop(spec, c, heroFallbackPoint)
+            delay(150L)
+        }
+        val leftFinal = recognizeTroops(troops).filter { it.first.name !in deployedNames }
+        if (leftFinal.isEmpty()) {
+            ShowMessage.run("夜世界源方案：保底落点下兵成功，全部兵种已下场")
+        } else {
+            ShowMessage.run("夜世界源方案：保底落点仍未下成功 ${leftFinal.size} 个兵种（该落点区域被游戏判定不可下）")
+        }
+    } else {
+        ShowMessage.run("夜世界源方案：常规 ${maxRounds} 轮后仍有 ${genuineLeft.size} 个兵种从未下，且无英雄成功落点可保底")
+    }
+
     ShowMessage.run("夜世界源方案：全部兵种识别与下兵流程结束")
     return true
+}
+
+/** 由走行（或第二村庄硬编码）计算方向无关的四向基础几何，套用方向修正、夹取到有效屏内，并构建 quads（含女巫外围）。 */
+private fun applyDirectionGeometry(dir: String) {
+    var ltStartX: Int; var ltStartY: Int; var rtStartX: Int; var rtStartY: Int
+    var lbStartX: Int; var lbStartY: Int; var rbStartX: Int; var rbStartY: Int
+    var ltEndX: Int; var ltEndY: Int; var rtEndX: Int; var rtEndY: Int
+    var lbEndX: Int; var lbEndY: Int; var rbEndX: Int; var rbEndY: Int
+    if (SECOND_VILLAGE) {
+        // 第二村庄：硬编码几何（源竖屏坐标）
+        ltStartX = 446; ltStartY = 535; rtStartX = 453; rtStartY = 723
+        lbStartX = 449; lbStartY = 268; rbStartX = 460; rbStartY = 1035
+        ltEndX = 244; ltEndY = 266; rtEndX = 232; rtEndY = 1026
+        lbEndX = 236; lbEndY = 549; rbEndX = 233; rbEndY = 729
+    } else {
+        // 用走行重算 开始/结束（源 15886~15901，含 +21 基础偏移）
+        ltStartX = 518 - walkRT + 21; ltStartY = (640 - walkRT * XY_RATIO).toInt()
+        rtStartX = 518 - walkLT + 21; rtStartY = (640 + walkLT * XY_RATIO).toInt()
+        lbStartX = 526 - walkLT + 21; lbStartY = (155 + walkLT * XY_RATIO).toInt()
+        rbStartX = 526 - walkRT + 21; rbStartY = (1128 - walkRT * XY_RATIO).toInt()
+        ltEndX = 157 + walkLB + 21; ltEndY = (155 + walkLB * XY_RATIO).toInt()
+        rtEndX = 157 + walkRB + 21; rtEndY = (1128 - walkRB * XY_RATIO).toInt()
+        lbEndX = 165 + walkRB + 21; lbEndY = (640 - walkRB * XY_RATIO).toInt()
+        rbEndX = 165 + walkLT + 21; rbEndY = (640 + walkLT * XY_RATIO).toInt()
+    }
+    // 方向相关 + 走行*XY*0.5 修正（源 15910~15917）
+    when (dir) {
+        "左上" -> ltStartY += (walkLT * XY_RATIO * 0.5).toInt()
+        "右上" -> rtStartY += (walkRT * XY_RATIO * 0.5).toInt()
+        "左下" -> lbStartY += (walkLB * XY_RATIO * 0.5).toInt()
+        "右下" -> rbStartY += (walkRB * XY_RATIO * 0.5).toInt()
+    }
+    ltEndY += (walkLT * XY_RATIO * 0.5).toInt()
+    rtEndY += (walkRT * XY_RATIO * 0.5).toInt()
+    lbEndY += (walkLB * XY_RATIO * 0.5).toInt()
+    rbEndY += (walkRB * XY_RATIO * 0.5).toInt()
+
+    // 夹取到有效屏内（源坐标 X∈[0,720]、Y∈[0,1280]；旋转后 横屏X=源Y、横屏Y=720-源X）。
+    // 动态边界扫描在个别基地/方向会给出越界值（实测 右上 出现过 开始(47,1296)，旋转后 横屏X=1296 越界），
+    // 落点跑到屏幕外 → 双指滑屏无效 → 兵种实际未下场。夹取后保证落点必在屏内（mid 由 start/end 派生，自动同步）。
+    fun cx(v: Int) = v.coerceIn(8, 712)
+    fun cy(v: Int) = v.coerceIn(8, 1272)
+    ltStartX = cx(ltStartX); ltStartY = cy(ltStartY)
+    rtStartX = cx(rtStartX); rtStartY = cy(rtStartY)
+    lbStartX = cx(lbStartX); lbStartY = cy(lbStartY)
+    rbStartX = cx(rbStartX); rbStartY = cy(rbStartY)
+    ltEndX = cx(ltEndX); ltEndY = cy(ltEndY)
+    rtEndX = cx(rtEndX); rtEndY = cy(rtEndY)
+    lbEndX = cx(lbEndX); lbEndY = cy(lbEndY)
+    rbEndX = cx(rbEndX); rbEndY = cy(rbEndY)
+
+    ltQuad = Quad(ltStartX, ltStartY, ltEndX, ltEndY)
+    rtQuad = Quad(rtStartX, rtStartY, rtEndX, rtEndY)
+    lbQuad = Quad(lbStartX, lbStartY, lbEndX, lbEndY)
+    rbQuad = Quad(rbStartX, rbStartY, rbEndX, rbEndY)
+    // 外围：复制开始/结束（女巫专用，源 15860~15879）
+    ltOuter = Quad(ltStartX, ltStartY, ltEndX, ltEndY)
+    rtOuter = Quad(rtStartX, rtStartY, rtEndX, rtEndY)
+    lbOuter = Quad(lbStartX, lbStartY, lbEndX, lbEndY)
+    rbOuter = Quad(rbStartX, rbStartY, rbEndX, rbEndY)
+    ShowMessage.run("夜世界源方案几何：方向=$dir 走行LT=$walkLT RT=$walkRT LB=$walkLB RB=$walkRB | 左上($ltStartX,$ltStartY)-($ltEndX,$ltEndY) 右上($rtStartX,$rtStartY)-($rtEndX,$rtEndY) 左下($lbStartX,$lbStartY)-($lbEndX,$lbEndY) 右下($rbStartX,$rbStartY)-($rbEndX,$rbEndY)")
+}
+
+/** 在四个方向中随机选一个与 cur 不同的方向，用于重试时更换落点区域。 */
+private fun randomDirectionOtherThan(cur: String): String {
+    val others = listOf("左上", "右上", "左下", "右下") - cur
+    return others[Random().nextInt(others.size)]
 }
 
 private data class TroopSpec(
@@ -221,20 +303,110 @@ private data class TroopSpec(
     val witch: Boolean    // 是否女巫（用外围点）
 )
 
-/** 检测并点下英雄卡槽。 */
-private suspend fun dropHero(schema: ColorSchema, label: String) {
-    val p = findMultiColors(schema) ?: run {
-        ShowMessage.run("夜世界源方案：未检测到英雄[$label]卡槽")
-        return
-    }
-    ShowMessage.run("夜世界源方案：检测到英雄[$label]卡槽(${p.x},${p.y})，点下放")
-    TouchActions.tap(p.x, p.y)
-    delay(300L)
+/** 英雄下场结果：无该英雄 / 下场成功(附带源坐标落点) / 下场失败。 */
+private sealed class HeroResult {
+    object Absent : HeroResult()                       // 本账号无此英雄
+    data class Success(val point: Point) : HeroResult() // point 为英雄成功落点的实屏坐标（heroDeployPoint 已旋转）
+    object Fail : HeroResult()                         // 有该英雄但下场失败（卡槽仍在）
 }
 
-/** 检测兵种卡槽并按源 函数323a 下兵。 */
-private suspend fun deployTroop(spec: TroopSpec) {
-    val card = if (spec.batch) {
+/** 依次下放两个英雄（王、夜飞机），各自独立重试；任一英雄下场成功即记录其源坐标落点作为兵种保底落点。 */
+private suspend fun deployHeroSource(): Point? {
+    var fallback: Point? = null
+    val heroes = listOf(
+        BuilderBaseAttackColors.BuilderBaseMachine to "王",
+        BuilderBaseAttackColors.BuilderBaseBattleCopter to "夜飞机"
+    )
+    for ((schema, label) in heroes) {
+        var res = deploySingleHero(schema, label)
+        var attempts = 1
+        while (res is HeroResult.Fail && attempts < HERO_MAX_ROUNDS) {
+            attempts++
+            // 换方向 → 重建几何 → 换落点重试
+            direction = randomDirectionOtherThan(direction)
+            applyDirectionGeometry(direction)
+            res = deploySingleHero(schema, label)
+        }
+        when (res) {
+            is HeroResult.Success -> {
+                // 优先用王的成功落点（王通常落点更靠中、更通用）；无王则退而用夜飞机
+                if (label == "王" || fallback == null) fallback = res.point
+                ShowMessage.run("夜世界源方案：英雄[$label] 下场成功，记录成功落点(实屏) @(${res.point.x},${res.point.y})")
+            }
+            is HeroResult.Fail -> ShowMessage.run("夜世界源方案：英雄[$label] 重试 $HERO_MAX_ROUNDS 轮仍未下场")
+            is HeroResult.Absent -> { /* 本账号无此英雄，跳过 */ }
+        }
+    }
+    return fallback
+}
+
+/** 下放单个英雄并判断下场是否成功：先点卡槽选中、再点落点才真正下场；下完回扫卡槽，消失即成功。 */
+private suspend fun deploySingleHero(schema: ColorSchema, label: String): HeroResult {
+    val card = findMultiColors(schema) ?: run {
+        ShowMessage.run("夜世界源方案：英雄[$label] 卡槽未识别（本账号无此英雄），跳过")
+        return HeroResult.Absent
+    }
+    ShowMessage.run("夜世界源方案：检测到英雄[$label]卡槽(${card.x},${card.y})，点下放")
+    // 第一步：点英雄卡 → 选中（与源 taps(夜世界王X, 夜世界王Y) 一致）
+    TouchActions.tap(card.x, card.y)
+    delay(300L)
+    // 第二步：再点一次落点（当前方向象限中点），否则英雄只被选中、永远不下场。
+    // 源 函数123a 在选完卡后紧接着 taps(左上/右上/左下/右下中间X, 中间Y) 才是真正下放，
+    // 之前漏掉这一步，导致整局战争机器都留在手里没下出去（实机日志已确认）。
+    val (dx, dy) = heroDeployPoint()
+    ShowMessage.run("夜世界源方案：英雄[$label]点落点 @(${dx.toInt()},${dy.toInt()})")
+    TouchActions.tap(dx.toInt(), dy.toInt())
+    delay(900L)  // 等英雄卡消耗 / 下场动画稳定后再回扫判断
+    // 判断成功：卡槽消失即视为下场成功
+    val stillThere = findMultiColors(schema) != null
+    return if (!stillThere) {
+        ShowMessage.run("夜世界源方案：英雄[$label] 下场成功")
+        // 直接记录英雄真实落点（heroDeployPoint 已是旋转后的实屏坐标），保底时复用同一“点卡槽+点落点”手势
+        HeroResult.Success(Point(dx.toInt(), dy.toInt()))
+    } else {
+        ShowMessage.run("夜世界源方案：英雄[$label] 下场疑似失败（卡槽仍在），将更换落点重试")
+        HeroResult.Fail
+    }
+}
+
+/** 识别全部命中的兵种卡槽（扫描全部卡槽，返回 兵种规格+命中坐标）。 */
+private suspend fun recognizeTroops(troops: List<TroopSpec>): List<Pair<TroopSpec, Point>> {
+    return troops.mapNotNull { spec ->
+        val c = if (spec.batch) findMultiColorsAll(spec.schema).firstOrNull()
+                else findMultiColors(spec.schema)
+        if (c == null) null else spec to c
+    }
+}
+
+/** 保底下兵：单指从卡槽拖到英雄成功落点（COC 标准放兵手势，比双指滑屏/双击更稳），在已验证有效的落点处放兵。 */
+private suspend fun dragDeployTroop(spec: TroopSpec, card: Point, realPoint: Point) {
+    ShowMessage.run("夜世界源方案：保底拖放下兵种[${spec.name}] 卡槽(${card.x},${card.y}) → 落点(${realPoint.x},${realPoint.y})")
+    // 点卡选中 → 单指从卡位拖到落点 → 松手即下场
+    TouchActions.tap(card.x, card.y)
+    delay(300L)
+    TouchActions.touchDown(card.x.toFloat(), card.y.toFloat(), 1)
+    delay(200L)
+    TouchActions.touchMove(realPoint.x.toFloat(), realPoint.y.toFloat(), 1)
+    delay(200L)
+    TouchActions.touchUp(1)
+    delay(400L)
+}
+
+/** 当前方向象限中点（已转横屏真实坐标），作为英雄下放落点（与源 函数123a 的 中间X/中间Y 对应）。 */
+private fun heroDeployPoint(): Pair<Float, Float> {
+    val q = when (direction) {
+        "左上" -> ltQuad
+        "右上" -> rtQuad
+        "左下" -> lbQuad
+        else -> rbQuad
+    }
+    return toRealX(q.midX, q.midY) to toRealY(q.midX, q.midY)
+}
+
+/** 检测兵种卡槽并按源 函数323a 双指滑屏下兵。 */
+private suspend fun deployTroop(spec: TroopSpec, card: Point? = null) {
+    // card 由调用方在“统一识别”阶段预先扫描得到；为空时再现场扫描（兼容旧路径）
+    val c = card ?: if (spec.batch) {
         // 源：findMultiColorAll 取 [1].y（Lua 1-based = 第一个匹配），这里取首个命中点
         findMultiColorsAll(spec.schema).firstOrNull()
     } else {
@@ -255,8 +427,8 @@ private suspend fun deployTroop(spec: TroopSpec) {
         "左下" -> lbOuter
         else -> rbOuter
     }
-    ShowMessage.run("夜世界源方案：部署兵种[${spec.name}] 方向=$direction 批量=${spec.batch} 女巫=${spec.witch} 命中卡槽(${card.x},${card.y})")
-    dualFingerDeploy(quad, outer, spec.witch, card)
+    ShowMessage.run("夜世界源方案：部署兵种[${spec.name}] 方向=$direction 批量=${spec.batch} 女巫=${spec.witch} 命中卡槽(${c.x},${c.y})")
+    dualFingerDeploy(quad, outer, spec.witch, c)
 }
 
 /**

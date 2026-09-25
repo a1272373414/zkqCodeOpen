@@ -37,3 +37,4 @@ app/upload_jar.py
 __pycache__/
 *.pyc
 tools/captures/
+temp/
