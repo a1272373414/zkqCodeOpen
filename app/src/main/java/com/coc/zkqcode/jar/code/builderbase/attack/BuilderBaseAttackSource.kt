@@ -42,18 +42,28 @@ private const val HERO_MAX_ROUNDS = 3
 // 方案3：卡位式从左到右下兵，点卡位后检测选中白框，无白框=已下完；
 //       每个卡位选中后在落点点4次，最多6轮；落点无效时换下一个候选落点。
 
-// 第一区域（第一场）：1英雄 + 6兵种 = 7个卡位
-// 第二区域（第二场）：1英雄 + 8兵种 = 9个卡位
-// 注意：以下 x 坐标为横屏 1280×720 下卡位中心近似值，需根据实机截图校准。
-private val AREA1_SLOT_XS = intArrayOf(80, 200, 320, 440, 560, 680, 800)
-private val AREA2_SLOT_XS = intArrayOf(70, 165, 260, 355, 450, 545, 640, 735, 830)
-private const val SLOT_CENTER_Y = 640
+// 部署栏物理卡位中心 x（横屏 1280×720）。坐标实测自
+// I:\coc\游戏截图\夜世界-英雄充能\夜世界-1已死亡-2已放技能-3未放技能-4选中-5未选中未下.jpg：
+// 托盘共 11 个卡位：卡位0=英雄，卡位1~10=兵（夜世界每个单位独占一张卡），
+// 未用到的卡位显示为虚线空框（点击无反应、无白框）。
+private val TRAY_SLOT_XS = intArrayOf(128, 243, 345, 447, 549, 651, 753, 855, 957, 1059, 1161)
+private const val SLOT_CENTER_Y = 645
 
-// 白框检测：点击卡位后，在 [x±45, y±45] 区域内统计高亮像素；
-// 亮度阈值 0xE0，数量阈值 80（选中时出现白框，未选中时极少）。
+// 第一区域（第一场）：1英雄+6兵 → 用卡位0~6；第二区域（第二场）：1英雄+8兵 → 用卡位0~8
+private const val AREA1_SLOT_COUNT = 7
+private const val AREA2_SLOT_COUNT = 9
+
+// 白框检测：卡被选中时整卡“弹出放大”，白色描边出现在卡片左右外沿的窄带内；
+// 卡内图案高光、灰卡(已下场)动画、英雄卡动画都进不了这两条窄带。
+// 实测标定（I:\coc\游戏截图\夜世界-英雄充能\...4选中-5未选中未下.jpg + 实机连拍16帧）：
+//   选中 ≈390（左右带合计），未选中/灰卡/英雄动画/空位 ≈0~31 → 阈值 80。
+// 注意：不能用整框计数——活卡未选中 43~59、灰卡 200~330、英雄动画 114~637，完全无法区分。
 private const val WHITE_BRIGHT_THRESHOLD = 0xE0
 private const val WHITE_BORDER_MIN_COUNT = 80
-private const val WHITE_CHECK_HALF_SIZE = 45
+private const val WHITE_BAND_OUTER = 48    // 窄带外沿距卡中心 x
+private const val WHITE_BAND_INNER = 42    // 窄带内沿距卡中心 x
+private const val WHITE_BAND_Y_TOP = 40    // 窄带上沿距卡中心 y（对应 605）
+private const val WHITE_BAND_Y_BOTTOM = 55 // 窄带下沿距卡中心 y（对应 700）
 
 // 每个落点点击次数、最大轮次
 private const val SOURCE3_TAPS_PER_POINT = 4
@@ -140,61 +150,61 @@ suspend fun builderBaseAttackSource3(): Boolean {
     }
 
     source3AreaCallCount++
-    val slotXs = if (source3AreaCallCount % 2 == 1) AREA1_SLOT_XS else AREA2_SLOT_XS
-    val areaName = if (source3AreaCallCount % 2 == 1) "第一区域(6兵)" else "第二区域(8兵)"
-    ShowMessage.run("夜世界方案3：当前为 $areaName，共 ${slotXs.size} 个卡位")
-
-    val slots = slotXs.mapIndexed { index, x ->
-        SlotState(index, x, SLOT_CENTER_Y)
-    }
+    val isFirstArea = source3AreaCallCount % 2 == 1
+    val slotCount = if (isFirstArea) AREA1_SLOT_COUNT else AREA2_SLOT_COUNT
+    // 物理托盘固定 11 个卡位，区域只决定使用前几个（其余为虚线空位）
+    val slotXs = TRAY_SLOT_XS.copyOf(slotCount)
+    val areaName = if (isFirstArea) "第一区域(1英雄+6兵)" else "第二区域(1英雄+8兵)"
+    ShowMessage.run("夜世界方案3：当前为 $areaName，使用卡位0~${slotCount - 1} 共 $slotCount 个")
 
     val deployCandidates = buildDeployCandidates()
     ShowMessage.run("夜世界方案3：候选落点 ${deployCandidates.size} 个")
+
+    // 每卡位轮询状态：上一轮是否有白框（连续两轮有白框=上轮没下出去→换落点）、下一个候选落点下标
+    val prevBorder = BooleanArray(slotCount)
+    val nextCandidate = IntArray(slotCount)
 
     var round = 0
     while (round < SOURCE3_MAX_ROUNDS) {
         round++
         ShowMessage.run("夜世界方案3：第 ${round}/${SOURCE3_MAX_ROUNDS} 轮下兵开始")
 
-        var anyDeployedThisRound = false
         var allDone = true
+        val curBorder = BooleanArray(slotCount)
 
-        for (slot in slots) {
-            if (slot.deployed) continue
+        for ((index, x) in slotXs.withIndex()) {
+            // 每轮都重新点全部卡位检测白框：无白框=已下完/空位；有白框=仍有兵可下。
+            // 不做“一次无白框就永久跳过”，避免点偏/动画未稳导致漏下（漏了下轮还能补）。
+            val hasBorder = tapAndCheckWhiteBorder(x, SLOT_CENTER_Y)
+            curBorder[index] = hasBorder
+            if (!hasBorder) continue
             allDone = false
 
-            // 点击卡位并检测是否出现选中白框：无白框=该卡位已下完
-            val hasWhiteBorder = tapAndCheckWhiteBorder(slot.x, slot.y)
-            if (!hasWhiteBorder) {
-                slot.deployed = true
-                ShowMessage.run("夜世界方案3：卡位${slot.index}(${slot.x},${slot.y}) 无选中白框，判定已下完")
-                continue
+            // 有白框 → 选中成功；若上一轮该卡位也有白框，说明上一轮没下出去，本轮换落点
+            if (prevBorder[index]) {
+                ShowMessage.run("夜世界方案3：卡位$index 连续两轮可选中（上轮未下出），更换落点重试")
             }
-
-            // 有白框 → 选中成功，取该卡位下一个候选落点
-            val point = deployCandidates[slot.nextCandidateIndex % deployCandidates.size]
-            slot.nextCandidateIndex++
-            ShowMessage.run("夜世界方案3：卡位${slot.index} 选中，使用落点 #${slot.nextCandidateIndex} (${point.x},${point.y})")
+            val point = deployCandidates[nextCandidate[index] % deployCandidates.size]
+            nextCandidate[index]++
+            ShowMessage.run("夜世界方案3：卡位$index($x) 选中，使用落点 #${nextCandidate[index]} (${point.x},${point.y})")
 
             // 在该落点连续点击 4 次
             repeat(SOURCE3_TAPS_PER_POINT) {
                 TouchActions.tap(point.x, point.y)
                 delay(120L)
             }
-            anyDeployedThisRound = true
             delay(200L)
         }
 
+        // 记录本轮各卡位白框状态，供下一轮对比“状态是否变化”
+        curBorder.copyInto(prevBorder)
+
         if (allDone) {
-            ShowMessage.run("夜世界方案3：全部卡位已下完，结束下兵")
+            ShowMessage.run("夜世界方案3：本轮全部卡位均无白框（已下完/空位），下兵完成")
             break
         }
-        if (!anyDeployedThisRound) {
-            ShowMessage.run("夜世界方案3：本轮无卡位可下（均判定已下完），结束下兵")
-            break
-        }
-        // 给游戏一点动画时间，再进入下一轮
-        delay(400L)
+        // 给游戏下兵动画留时间，再进入下一轮
+        delay(800L)
     }
 
     ShowMessage.run("夜世界方案3：下兵完成，进入技能轮询")
@@ -203,60 +213,60 @@ suspend fun builderBaseAttackSource3(): Boolean {
     return true
 }
 
-/** 方案3 单个卡位的状态。 */
-private data class SlotState(
-    val index: Int,
-    val x: Int,
-    val y: Int,
-    var deployed: Boolean = false,
-    var nextCandidateIndex: Int = 0
-)
-
 /**
  * 点击卡位后检测是否出现白色选中边框。
- * 返回 true = 白框出现（卡位仍有兵/英雄，可下）；false = 无白框（已下完或该卡位为空）。
+ * 返回 true = 白框出现（卡位仍有兵/英雄，可下）；false = 无白框（已下完/空位/灰卡）。
  */
-private suspend fun tapAndCheckWhiteBorder(x: Int, y: Int): Boolean {
-    TouchActions.tap(x, y)
+private suspend fun tapAndCheckWhiteBorder(cx: Int, cy: Int): Boolean {
+    TouchActions.tap(cx, cy)
     delay(250L)  // 等选中动画/白框稳定
     val cap = ScreenCaptureManager.capture(false) as? ScreenCaptureManager.CaptureResult
         ?: return false
-    val count = countBrightPixels(
-        cap,
-        x - WHITE_CHECK_HALF_SIZE, y - WHITE_CHECK_HALF_SIZE,
-        x + WHITE_CHECK_HALF_SIZE, y + WHITE_CHECK_HALF_SIZE,
-        WHITE_BRIGHT_THRESHOLD
-    )
-    ShowMessage.run("夜世界方案3：卡位(${x},${y}) 白框亮度像素数=$count")
+    val count = countWhiteFrameEdge(cap, cx, cy, WHITE_BRIGHT_THRESHOLD)
+    ShowMessage.run("夜世界方案3：卡位(${cx},${cy}) 白框边缘像素数=$count")
     return count >= WHITE_BORDER_MIN_COUNT
 }
 
 /**
- * 统计横屏 capture 中指定矩形内，R/G/B 均 >= brightThreshold 的像素数量。
+ * 统计卡位左右两条外沿窄带内的近白（R/G/B 均 >= brightThreshold）像素数。
+ * 只有“选中白框”会出现在卡外沿；灰卡动画/英雄动画/卡内图案均不会进入窄带。
  * 坐标直接使用横屏坐标，不做源→横屏旋转。
  */
-private fun countBrightPixels(
+private fun countWhiteFrameEdge(
     cap: ScreenCaptureManager.CaptureResult,
-    x1: Int, y1: Int, x2: Int, y2: Int,
-    brightThreshold: Int
+    cx: Int, cy: Int, brightThreshold: Int
 ): Int {
     val w = cap.width
     val h = cap.height
     val buf = cap.buffer
     val stride = cap.rowStride
-    val xStart = x1.coerceIn(0, w - 1)
-    val xEnd = x2.coerceIn(0, w - 1)
-    val yStart = y1.coerceIn(0, h - 1)
-    val yEnd = y2.coerceIn(0, h - 1)
     val thr = brightThreshold.coerceIn(0, 255)
+    val yStart = (cy - WHITE_BAND_Y_TOP).coerceIn(0, h - 1)
+    val yEnd = (cy + WHITE_BAND_Y_BOTTOM).coerceIn(0, h - 1)
     var count = 0
     for (y in yStart..yEnd) {
-        for (x in xStart..xEnd) {
-            val o = y * stride + x * 4
-            val b = buf.get(o).toInt() and 0xFF
-            val g = buf.get(o + 1).toInt() and 0xFF
-            val r = buf.get(o + 2).toInt() and 0xFF
-            if (r >= thr && g >= thr && b >= thr) count++
+        // 左窄带 [cx-48, cx-42) + 右窄带 (cx+42, cx+48]
+        var x = cx - WHITE_BAND_OUTER
+        while (x <= cx - WHITE_BAND_INNER) {
+            if (x in 0 until w) {
+                val o = y * stride + x * 4
+                val b = buf.get(o).toInt() and 0xFF
+                val g = buf.get(o + 1).toInt() and 0xFF
+                val r = buf.get(o + 2).toInt() and 0xFF
+                if (r >= thr && g >= thr && b >= thr) count++
+            }
+            x++
+        }
+        x = cx + WHITE_BAND_INNER
+        while (x <= cx + WHITE_BAND_OUTER) {
+            if (x in 0 until w) {
+                val o = y * stride + x * 4
+                val b = buf.get(o).toInt() and 0xFF
+                val g = buf.get(o + 1).toInt() and 0xFF
+                val r = buf.get(o + 2).toInt() and 0xFF
+                if (r >= thr && g >= thr && b >= thr) count++
+            }
+            x++
         }
     }
     return count
