@@ -38,6 +38,31 @@ private const val CISHU = 2
 // 英雄（第一区域）单英雄下放的最大重试轮次：每轮换方向重建几何换落点
 private const val HERO_MAX_ROUNDS = 3
 
+// ───────────────── 夜世界下兵方案3 配置 ─────────────────
+// 方案3：卡位式从左到右下兵，点卡位后检测选中白框，无白框=已下完；
+//       每个卡位选中后在落点点4次，最多6轮；落点无效时换下一个候选落点。
+
+// 第一区域（第一场）：1英雄 + 6兵种 = 7个卡位
+// 第二区域（第二场）：1英雄 + 8兵种 = 9个卡位
+// 注意：以下 x 坐标为横屏 1280×720 下卡位中心近似值，需根据实机截图校准。
+private val AREA1_SLOT_XS = intArrayOf(80, 200, 320, 440, 560, 680, 800)
+private val AREA2_SLOT_XS = intArrayOf(70, 165, 260, 355, 450, 545, 640, 735, 830)
+private const val SLOT_CENTER_Y = 640
+
+// 白框检测：点击卡位后，在 [x±45, y±45] 区域内统计高亮像素；
+// 亮度阈值 0xE0，数量阈值 80（选中时出现白框，未选中时极少）。
+private const val WHITE_BRIGHT_THRESHOLD = 0xE0
+private const val WHITE_BORDER_MIN_COUNT = 80
+private const val WHITE_CHECK_HALF_SIZE = 45
+
+// 每个落点点击次数、最大轮次
+private const val SOURCE3_TAPS_PER_POINT = 4
+private const val SOURCE3_MAX_ROUNDS = 6
+
+// 方案3 区域计数：每进程第1次调用=第一区域（6兵），第2次=第二区域（8兵）。
+// （与 realAttack 中“已进入第二区域”对应，每场夜世界对战会触发两次 normalBattle。）
+private var source3AreaCallCount = 0
+
 // 源竖屏宽（= 横屏高）
 private const val SRC_W = 720
 
@@ -85,28 +110,184 @@ private fun toRealY(sx: Int, sy: Int) = (SRC_W - sx).toFloat()
 private fun rnd(n: Int) = Random().nextInt(n)
 
 /**
- * 入口：先按源 函数123a 下兵，再调用现有 [releaseSkillsLoop] 释放英雄技能并等待战斗结束。
+ * 入口：夜世界下兵方案2（源项目函数123a/323a/128a 保真移植）。
+ * 先下兵，再调用现有 [releaseSkillsLoop] 释放英雄技能并等待战斗结束。
  * 回营（点退出对战）由 normalBattle 的共享逻辑处理。
  */
 suspend fun builderBaseAttackSource(): Boolean {
-    ShowMessage.run("夜世界源方案：进入 函数123a 下兵流程")
+    ShowMessage.run("夜世界方案2：进入 函数123a 下兵流程")
     if (!deployTroopsSource()) {
-        ShowMessage.run("夜世界源方案：下兵失败，终止本场")
+        ShowMessage.run("夜世界方案2：下兵失败，终止本场")
         return false
     }
-    ShowMessage.run("夜世界源方案：下兵完成，进入 函数128a 技能释放与战斗监控")
+    ShowMessage.run("夜世界方案2：下兵完成，进入 函数128a 技能释放与战斗监控")
     // 函数128a 的战斗监控：技能释放 + 等待放弃按钮出现。
     // 现有 releaseSkillsLoop 已包含"战斗中持续释放英雄技能直到战斗结束"的逻辑，直接复用。
     releaseSkillsLoop()
-    ShowMessage.run("夜世界源方案：技能轮询结束，交回 normalBattle 继续回营")
+    ShowMessage.run("夜世界方案2：技能轮询结束，交回 normalBattle 继续回营")
     return true
 }
 
 /**
- * 函数123a：选方向、算几何（含动态边界扫描）、英雄下放、逐兵种下兵。
+ * 入口：夜世界下兵方案3（卡位式从左到右、点卡位+点落点4次、白框识别判已下、最多6轮、落点无效换点）。
+ * 复用方案2的方向/边界扫描/几何；下兵逻辑改为固定卡位轮询。
  */
-private suspend fun deployTroopsSource(): Boolean {
-    // 1. 随机选一个方向作为蛮王位置（左上/右上/左下/右下）
+suspend fun builderBaseAttackSource3(): Boolean {
+    ShowMessage.run("夜世界方案3：进入卡位式下兵流程")
+    if (!prepareSourceGeometry()) {
+        ShowMessage.run("夜世界方案3：几何准备失败，终止本场")
+        return false
+    }
+
+    source3AreaCallCount++
+    val slotXs = if (source3AreaCallCount % 2 == 1) AREA1_SLOT_XS else AREA2_SLOT_XS
+    val areaName = if (source3AreaCallCount % 2 == 1) "第一区域(6兵)" else "第二区域(8兵)"
+    ShowMessage.run("夜世界方案3：当前为 $areaName，共 ${slotXs.size} 个卡位")
+
+    val slots = slotXs.mapIndexed { index, x ->
+        SlotState(index, x, SLOT_CENTER_Y)
+    }
+
+    val deployCandidates = buildDeployCandidates()
+    ShowMessage.run("夜世界方案3：候选落点 ${deployCandidates.size} 个")
+
+    var round = 0
+    while (round < SOURCE3_MAX_ROUNDS) {
+        round++
+        ShowMessage.run("夜世界方案3：第 ${round}/${SOURCE3_MAX_ROUNDS} 轮下兵开始")
+
+        var anyDeployedThisRound = false
+        var allDone = true
+
+        for (slot in slots) {
+            if (slot.deployed) continue
+            allDone = false
+
+            // 点击卡位并检测是否出现选中白框：无白框=该卡位已下完
+            val hasWhiteBorder = tapAndCheckWhiteBorder(slot.x, slot.y)
+            if (!hasWhiteBorder) {
+                slot.deployed = true
+                ShowMessage.run("夜世界方案3：卡位${slot.index}(${slot.x},${slot.y}) 无选中白框，判定已下完")
+                continue
+            }
+
+            // 有白框 → 选中成功，取该卡位下一个候选落点
+            val point = deployCandidates[slot.nextCandidateIndex % deployCandidates.size]
+            slot.nextCandidateIndex++
+            ShowMessage.run("夜世界方案3：卡位${slot.index} 选中，使用落点 #${slot.nextCandidateIndex} (${point.x},${point.y})")
+
+            // 在该落点连续点击 4 次
+            repeat(SOURCE3_TAPS_PER_POINT) {
+                TouchActions.tap(point.x, point.y)
+                delay(120L)
+            }
+            anyDeployedThisRound = true
+            delay(200L)
+        }
+
+        if (allDone) {
+            ShowMessage.run("夜世界方案3：全部卡位已下完，结束下兵")
+            break
+        }
+        if (!anyDeployedThisRound) {
+            ShowMessage.run("夜世界方案3：本轮无卡位可下（均判定已下完），结束下兵")
+            break
+        }
+        // 给游戏一点动画时间，再进入下一轮
+        delay(400L)
+    }
+
+    ShowMessage.run("夜世界方案3：下兵完成，进入技能轮询")
+    releaseSkillsLoop()
+    ShowMessage.run("夜世界方案3：技能轮询结束，交回 normalBattle 继续回营")
+    return true
+}
+
+/** 方案3 单个卡位的状态。 */
+private data class SlotState(
+    val index: Int,
+    val x: Int,
+    val y: Int,
+    var deployed: Boolean = false,
+    var nextCandidateIndex: Int = 0
+)
+
+/**
+ * 点击卡位后检测是否出现白色选中边框。
+ * 返回 true = 白框出现（卡位仍有兵/英雄，可下）；false = 无白框（已下完或该卡位为空）。
+ */
+private suspend fun tapAndCheckWhiteBorder(x: Int, y: Int): Boolean {
+    TouchActions.tap(x, y)
+    delay(250L)  // 等选中动画/白框稳定
+    val cap = ScreenCaptureManager.capture(false) as? ScreenCaptureManager.CaptureResult
+        ?: return false
+    val count = countBrightPixels(
+        cap,
+        x - WHITE_CHECK_HALF_SIZE, y - WHITE_CHECK_HALF_SIZE,
+        x + WHITE_CHECK_HALF_SIZE, y + WHITE_CHECK_HALF_SIZE,
+        WHITE_BRIGHT_THRESHOLD
+    )
+    ShowMessage.run("夜世界方案3：卡位(${x},${y}) 白框亮度像素数=$count")
+    return count >= WHITE_BORDER_MIN_COUNT
+}
+
+/**
+ * 统计横屏 capture 中指定矩形内，R/G/B 均 >= brightThreshold 的像素数量。
+ * 坐标直接使用横屏坐标，不做源→横屏旋转。
+ */
+private fun countBrightPixels(
+    cap: ScreenCaptureManager.CaptureResult,
+    x1: Int, y1: Int, x2: Int, y2: Int,
+    brightThreshold: Int
+): Int {
+    val w = cap.width
+    val h = cap.height
+    val buf = cap.buffer
+    val stride = cap.rowStride
+    val xStart = x1.coerceIn(0, w - 1)
+    val xEnd = x2.coerceIn(0, w - 1)
+    val yStart = y1.coerceIn(0, h - 1)
+    val yEnd = y2.coerceIn(0, h - 1)
+    val thr = brightThreshold.coerceIn(0, 255)
+    var count = 0
+    for (y in yStart..yEnd) {
+        for (x in xStart..xEnd) {
+            val o = y * stride + x * 4
+            val b = buf.get(o).toInt() and 0xFF
+            val g = buf.get(o + 1).toInt() and 0xFF
+            val r = buf.get(o + 2).toInt() and 0xFF
+            if (r >= thr && g >= thr && b >= thr) count++
+        }
+    }
+    return count
+}
+
+/**
+ * 由当前四向几何构建候选落点列表（实屏坐标）：四象限中点 + 女巫外围中点。
+ * 每个卡位按顺序循环使用，落点无效时自动换下一个。
+ */
+private fun buildDeployCandidates(): List<Point> {
+    val list = mutableListOf<Point>()
+    fun addQuad(q: Quad) {
+        list.add(Point(toRealX(q.midX, q.midY).toInt(), toRealY(q.midX, q.midY).toInt()))
+    }
+    addQuad(ltQuad)
+    addQuad(rtQuad)
+    addQuad(lbQuad)
+    addQuad(rbQuad)
+    addQuad(ltOuter)
+    addQuad(rtOuter)
+    addQuad(lbOuter)
+    addQuad(rbOuter)
+    return list
+}
+
+/**
+ * 复用部分：随机选方向 + 动态边界扫描 + 构建四向几何（含夹取）。
+ * 方案2（deployTroopsSource）与方案3（builderBaseAttackSource3）共用。
+ */
+private suspend fun prepareSourceGeometry(): Boolean {
+    // 随机选一个方向作为蛮王位置（左上/右上/左下/右下）
     direction = when (Random().nextInt(4)) {
         0 -> "左上"
         1 -> "右上"
@@ -115,7 +296,7 @@ private suspend fun deployTroopsSource(): Boolean {
     }
     ShowMessage.run("夜世界源方案：随机蛮王位置 = $direction")
 
-    // 2. 动态边界扫描（第二村庄用硬编码几何），得到走行；具体四向几何 + 方向修正 + 夹取 + 构建 quads 由 applyDirectionGeometry 完成（便于重试时换方向）
+    // 动态边界扫描（第二村庄用硬编码几何），得到走行；具体四向几何 + 方向修正 + 夹取 + 构建 quads 由 applyDirectionGeometry 完成（便于重试时换方向）
     if (!SECOND_VILLAGE) {
         ShowMessage.run("夜世界源方案：开始动态边界扫描，色系=${if (altBoundaryScan) "2973C2" else "4053AE"}")
         if (altBoundaryScan) {
@@ -136,6 +317,14 @@ private suspend fun deployTroopsSource(): Boolean {
         ShowMessage.run("夜世界源方案：第二村庄模式，跳过边界扫描，使用硬编码几何")
     }
     applyDirectionGeometry(direction)
+    return true
+}
+
+/**
+ * 函数123a：英雄下放、逐兵种下兵。此即“夜世界下兵方案2”（源项目保真移植）。
+ */
+private suspend fun deployTroopsSource(): Boolean {
+    if (!prepareSourceGeometry()) return false
 
     // ───────────────── 第一区域(英雄)与第二区域(兵)合并轮次：识别 → 第1轮顺带下英雄 → 下本轮回溯到的新兵种 ─────────────────
     // 英雄在第 1 轮“识别之后”下放（与源方案一致：识别→下英雄→下兵，英雄与兵间隔最短），
