@@ -4,6 +4,7 @@ import com.coc.zkqcode.core.util.basic.ShowMessage
 import com.coc.zkqcode.core.util.basic.delayWithMultiplier
 import com.coc.zkqcode.core.util.touchactions.TouchActions.pinchIn
 import com.coc.zkqcode.core.util.touchactions.TouchActions.swipe
+import com.coc.zkqcode.jar.code.universal.CameraState
 import com.coc.zkqcode.jar.code.universal.clickRightBottom
 
 suspend fun zoomSmallBuilderBase(isForBuild: Boolean = false) {
@@ -26,4 +27,6 @@ suspend fun zoomSmallBuilderBase(isForBuild: Boolean = false) {
         swipe(575, 430, 575, 710, delayTime = 180)
     }
     delayWithMultiplier(200)
+    // 同 zoomSmallMainBase：仅通用远景置位，建造摆放视角不置位
+    CameraState.builderBaseZoomedOut = !isForBuild
 }

@@ -3,6 +3,7 @@ package com.coc.zkqcode.jar.code.mainbase.others
 import com.coc.zkqcode.core.util.basic.delayWithMultiplier
 import com.coc.zkqcode.core.util.touchactions.TouchActions.pinchIn
 import com.coc.zkqcode.core.util.touchactions.TouchActions.swipe
+import com.coc.zkqcode.jar.code.universal.CameraState
 import com.coc.zkqcode.jar.code.universal.clickRightBottom
 
 suspend fun zoomSmallMainBase(isForBuild: Boolean = false, isForAttack: Boolean = false) {
@@ -31,4 +32,8 @@ suspend fun zoomSmallMainBase(isForBuild: Boolean = false, isForAttack: Boolean 
         clickRightBottom(1)
         swipe(690, 550, 590, 710, delayTime = 180)
     }
+    // 源 函数72a 末尾置 `_ENV["已缩小画面"] = true`。本项目仅当镜头停在"通用远景"时置位：
+    // 建造摆放视角（isForBuild）与进攻边缘视角（isForAttack）都是专用视角，不能让后续模块
+    // 误判为"已缩小"而跳过缩小。
+    CameraState.mainVillageZoomedOut = !isForBuild && !isForAttack
 }

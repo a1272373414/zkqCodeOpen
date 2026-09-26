@@ -8,6 +8,7 @@ import com.coc.zkqcode.core.util.basic.waitForPlay
 import com.coc.zkqcode.jar.code.builderbase.playBuilderBase
 import com.coc.zkqcode.jar.code.clancapital.playClanCapital
 import com.coc.zkqcode.jar.code.mainbase.playMainBase
+import com.coc.zkqcode.jar.code.universal.CameraState
 import com.coc.zkqcode.jar.code.universal.GameVersion
 import com.coc.zkqcode.jar.code.universal.InGamesVars
 import com.coc.zkqcode.jar.code.universal.create.batchCreateAccounts
@@ -125,6 +126,9 @@ suspend fun runMainScript() {
         val nextAccount = findAndActivateAccount(searchOrder, isBatchCreate) ?: return
 
         InGamesVars.currentAccountNumber = nextAccount
+        // 切换账号后镜头状态未知（换号=重进游戏），必须整体复位，避免沿用上一个账号的
+        // "已缩小"标记而漏掉第一次缩小。
+        CameraState.reset()
         writeMemory(StorageKeys.ACCOUNT_NUMBER, nextAccount.toString())
         // In batch-create mode, force GLOBAL version for all accounts
         InGamesVars.currentGameVersion = if (isBatchCreate) {

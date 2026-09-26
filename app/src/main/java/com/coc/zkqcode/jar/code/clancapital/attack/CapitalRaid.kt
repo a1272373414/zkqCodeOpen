@@ -7,6 +7,7 @@ import com.topjohnwu.superuser.Shell
 import com.coc.zkqcode.jar.code.clancapital.saveCapitalScreenshot
 import com.coc.zkqcode.jar.code.clancapital.trainCapitalArmy
 import com.coc.zkqcode.jar.code.colorschema.MyColors
+import com.coc.zkqcode.jar.code.universal.CameraState
 import com.coc.zkqcode.jar.code.universal.GameScene
 import com.coc.zkqcode.jar.code.universal.InGamesVars
 import com.coc.zkqcode.jar.code.universal.SceneState
@@ -121,6 +122,9 @@ private suspend fun zoomToCapitalShore() {
     // 3. 源脚本 swipes(186,286 → 1200,1630,300) 的 90° 映射原样（终点越界按系统钳制处理）
     TouchActions.swipe(286, 719 - 186, 1630, 719 - 1200, 300)
     delayWithMultiplier(200)
+    // 源 函数319a 放大后写 `_ENV["已缩小画面"] = false`：放大 + 平移已破坏"通用远景"，
+    // 主世界后续功能必须重新缩小，不能沿用旧的"已缩小"状态。
+    CameraState.markMainVillageZoomedIn()
 }
 
 /**

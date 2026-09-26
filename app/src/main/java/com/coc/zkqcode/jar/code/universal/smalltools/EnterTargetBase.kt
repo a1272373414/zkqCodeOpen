@@ -2,6 +2,7 @@ package com.coc.zkqcode.jar.code.universal.smalltools
 
 import com.coc.zkqcode.core.util.basic.ShowMessage
 import com.coc.zkqcode.core.util.basic.delayWithMultiplier
+import com.coc.zkqcode.jar.code.universal.CameraState
 import com.coc.zkqcode.jar.code.universal.colors.findMultiColors
 import com.coc.zkqcode.core.util.touchactions.TouchActions
 import com.coc.zkqcode.jar.code.builderbase.others.zoomSmallBuilderBase
@@ -25,6 +26,9 @@ suspend fun enterMainBase(): Boolean {
             ShowMessage("已进入主世界")
             clickRightBottom(1)
             delayWithMultiplier(200)
+            // 源 函数60a/61a 末尾：切换村庄后复位 `已缩小画面 = false`。
+            // 进入主世界后镜头是游戏默认状态（切场景会重置缩放），必须重新缩小。
+            CameraState.markVillageSwitched()
             return true
         }
         val remaining = (30_000L - (System.currentTimeMillis() - loopStart)) / 1000.0
@@ -63,6 +67,7 @@ suspend fun enterBuilderBase(isCheck: Boolean): Boolean {
         // 1. Check for Builder Base success indicator
         if (findMultiColorsUntil(schemas = listOf(MyColors.BuilderBaseWorker, MyColors.BuilderBaseWorker2), duration = 200) != null) {
             ShowMessage("已进入夜世界")
+            CameraState.markVillageSwitched()
             return true
         }
         ShowMessage("尝试进入夜世界中，剩余${"%.1f".format(remaining)}秒后退出\n请手动给主世界和夜世界切换默认场景")
@@ -87,6 +92,7 @@ suspend fun enterBuilderBase(isCheck: Boolean): Boolean {
                     // 1. Check for Builder Base success indicator
                     if (findMultiColorsUntil(schemas = listOf(MyColors.BuilderBaseWorker, MyColors.BuilderBaseWorker2), duration = 200) != null) {
                         ShowMessage("已进入夜世界")
+                        CameraState.markVillageSwitched()
                         return true
                     }
 

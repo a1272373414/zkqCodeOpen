@@ -7,10 +7,12 @@ import com.coc.zkqcode.jar.code.clancapital.attack.enterClanCapital
 import com.coc.zkqcode.jar.code.clancapital.attack.isInClanCapital
 import com.coc.zkqcode.jar.code.clancapital.attack.playCapitalRaid
 import com.coc.zkqcode.jar.code.colorschema.MyColors
+import com.coc.zkqcode.jar.code.universal.GameScene
 import com.coc.zkqcode.jar.code.universal.InGamesVars
 import com.coc.zkqcode.jar.code.universal.SceneState
 import com.coc.zkqcode.jar.code.universal.colors.findMultiColors
 import com.coc.zkqcode.jar.code.universal.colors.findMultiColorsUntil
+import com.coc.zkqcode.jar.code.universal.ensureZoomedOutMainBase
 import android.os.Environment
 import com.coc.zkqcode.core.util.bugreporter.BugReporter
 import com.coc.zkqcode.jar.code.universal.smalltools.getBooleanConfigRuntime
@@ -290,6 +292,13 @@ suspend fun playClanCapital(): Boolean {
     }
     ShowMessage("账号${InGamesVars.currentAccountNumber}，都城：本次领都城币 $totalClaims 次，打突袭 $battles 场（总都城币精确数字待真机 OCR 标定，当前以领币次数统计）")
     appendCapitalSummary(InGamesVars.currentAccountNumber, totalClaims, battles)
+    // 找都城入口时会放大并平移主世界镜头（zoomToCapitalShore，源 函数319a）。若本轮都城流程
+    // 中途退回、此刻仍停在主世界（例如没能进入都城），必须把镜头缩小归位，
+    // 否则残留的放大+偏移会影响本轮后续（或下一轮）的建筑/障碍/教程等识别。
+    if (SceneState.currentScene == GameScene.MAIN_VILLAGE) {
+        ShowMessage("账号${InGamesVars.currentAccountNumber}，都城：恢复主世界镜头（入口识别曾放大画面）")
+        ensureZoomedOutMainBase()
+    }
     SceneState.setFlowNode("都城流程完成")
     return false
 }
