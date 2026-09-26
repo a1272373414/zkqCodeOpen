@@ -11,8 +11,12 @@ import com.coc.zkqcode.jar.code.universal.InGamesVars
 import com.coc.zkqcode.jar.code.universal.SceneState
 import com.coc.zkqcode.jar.code.universal.colors.findMultiColors
 import com.coc.zkqcode.jar.code.universal.colors.findMultiColorsUntil
+import android.os.Environment
+import com.coc.zkqcode.core.util.bugreporter.BugReporter
 import com.coc.zkqcode.jar.code.universal.smalltools.getBooleanConfigRuntime
 import com.coc.zkqcode.jar.ui.schema.Schema
+import com.topjohnwu.superuser.Shell
+import java.io.File
 import java.util.Calendar
 
 /**
@@ -121,8 +125,35 @@ suspend fun claimCapitalGold(): Boolean {
         }
     }
     closeCoinScreen()
+    // 关键节点截图存档：每号每周仅 5 次突袭机会，领币结果务必留存
+    if (collected) saveCapitalScreenshot("capital_claim")
     ShowMessage("账号${InGamesVars.currentAccountNumber}，都城：领都城币${if (collected) "完成" else "没有可收的"}")
     return collected
+}
+
+/**
+ * 都城测试截图存档（顶层工具，供 clancapital 包内复用）。
+ * 每号每周仅 5 次突袭机会，关键节点务必留存截图，避免后续测试无数据可分析。
+ */
+suspend fun saveCapitalScreenshot(tag: String) {
+    val name = "capital_${tag}_acc${InGamesVars.currentAccountNumber}_${System.currentTimeMillis()}"
+    runCatching { BugReporter.takeScreenshot(name) }
+        .onFailure { ShowMessage("账号${InGamesVars.currentAccountNumber}，都城截图失败：${it.message}") }
+    ShowMessage("账号${InGamesVars.currentAccountNumber}，都城截图已存：$name")
+}
+
+/** 把本次都城流程的领币次数/战斗场次追加写入汇总文件（zkqFiles/capitalTest），便于跨测试留存。 */
+private fun appendCapitalSummary(account: Int, claims: Int, battles: Int) {
+    runCatching {
+        // 外部存储受 scoped storage 限制，Java File API 写 /storage/emulated/0 会报
+        // No such file or directory（2026-09-26 踩坑）；项目惯例改用 root shell 读写。
+        val dir = "${Environment.getExternalStorageDirectory().path}/zkqFiles/capitalTest"
+        Shell.cmd("mkdir -p \"$dir\"").exec()
+        val line = "ts=${System.currentTimeMillis()} acc=$account claims=$claims battles=$battles"
+        val file = "$dir/capital_raid_summary_acc$account.txt"
+        Shell.cmd("echo '$line' >> \"$file\"").exec()
+        ShowMessage("账号$account，都城汇总已写：$file")
+    }.onFailure { ShowMessage("账号$account，都城汇总写盘失败：${it.message}") }
 }
 
 /**
@@ -231,6 +262,8 @@ suspend fun startCapitalRaid(): Boolean {
  */
 suspend fun playClanCapital(): Boolean {
     SceneState.setFlowNode("都城")
+    var totalClaims = 0
+    var battles = 0
     val claimEnabled = getBooleanConfigRuntime(Schema.MAIN_BASE_SETTINGS.CLAIM_CAPITAL_GOLD.key)
     val donateEnabled = getBooleanConfigRuntime(Schema.MAIN_BASE_SETTINGS.DONATE_CAPITAL_GOLD.key)
     val playRaidEnabled = getBooleanConfigRuntime(Schema.MAIN_BASE_SETTINGS.PLAY_RAID.key)
@@ -242,7 +275,7 @@ suspend fun playClanCapital(): Boolean {
         return false
     }
 
-    if (claimEnabled) claimCapitalGold()
+    if (claimEnabled && claimCapitalGold()) totalClaims++
     if (donateEnabled) donateCapitalGold()
     if (startRaidEnabled) startCapitalRaid()
 
@@ -250,11 +283,13 @@ suspend fun playClanCapital(): Boolean {
         if (!isCapitalRaidTime()) {
             ShowMessage("账号${InGamesVars.currentAccountNumber}，都城：不在突袭时间段（周五15:03~周一16:00），跳过攻打都城")
         } else {
-            var battles = 0
+            battles = 0
             while (battles < MAX_RAID_BATTLES && playCapitalRaid()) battles++
             ShowMessage("账号${InGamesVars.currentAccountNumber}，都城：本次共打了${battles}场突袭")
         }
     }
+    ShowMessage("账号${InGamesVars.currentAccountNumber}，都城：本次领都城币 $totalClaims 次，打突袭 $battles 场（总都城币精确数字待真机 OCR 标定，当前以领币次数统计）")
+    appendCapitalSummary(InGamesVars.currentAccountNumber, totalClaims, battles)
     SceneState.setFlowNode("都城流程完成")
     return false
 }

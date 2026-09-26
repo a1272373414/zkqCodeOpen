@@ -25,6 +25,18 @@ import com.coc.zkqcode.jar.code.colorschema.ColorSchema
 interface ICapitalRaidColors {
     val CapitalClanEntryButton: ColorSchema
     val CapitalClanEntryButton2: ColorSchema
+    /** "要立即进攻吗？"确认弹窗：底部深绿横幅 + 右上大红X。 */
+    val CapitalAttackConfirm: ColorSchema
+    /** 确认弹窗中的"进攻"按钮 = 绿色（部队已满，可进攻）。 */
+    val CapitalAttackConfirmReady: ColorSchema
+    /** 确认弹窗中的"进攻"按钮 = 灰色（部队未满，不可进攻）。 */
+    val CapitalAttackConfirmGray: ColorSchema
+    /** 都城地图：选中子城后底部弹出的白色按钮条（侦察/进攻/详细信息）。 */
+    val CapitalDistrictBar: ColorSchema
+    /** 按钮条中的"进攻"按钮 = 灰色（该子城已三星/不可进攻）。 */
+    val CapitalDistrictAttackGray: ColorSchema
+    /** 都城地图：选中子城后底部弹出的红色"进攻"按钮条（源脚本 L47307 cmpColorEx，映射自竖屏）。 */
+    val CapitalBottomAttackBar: ColorSchema
     val CapitalRaidCongrats: ColorSchema
     val CapitalRaidNewRaid: ColorSchema
     val CapitalRaidMapAnchor: ColorSchema
@@ -62,20 +74,24 @@ interface ICapitalRaidColors {
 }
 
 object CapitalRaidColors : ICapitalRaidColors {
-    // 都城入口（主世界海岸的飞艇/小船）：迁移自源脚本 函数319a 的腾讯分支：旧"蓝紫按钮"特征在现版本失配（2026-09-22 实测），
-    // findMultiColor(76,515,593,1201,"4D6EFF-101010",...)，按文档 11.3 的 90° 映射到横屏。
-    // 真机实测：两张主世界画面命中 @(548,510) / @(553,488)，夜世界画面零误命中。
+    // 都城入口 = 主世界海岸的热气球飞艇（橙红气球×3 + 棕色平台，上方有红色 S⚔ 突袭次数标记）。
+    // 偏移按稳定镜头（zoomToCapitalShore 固定 pinchIn 时长后）的真实截图 fail_v4.png 重标：
+    // 命中 @(1002,369)；偏移仅用气球本体×3 与平台暗部。
+    // 注意：气球上方的红色 S⚔ 突袭次数标记是【对战期间才显示】的，不能作为特征点
+    // （2026-09-26 曾纳入 S⚔ 偏移，被指出后移除）。夜世界与主世界 HUD 均零误命中。
+    // 注意1：颜色串按 BGR 写（ColorSchema.parseBgrToRgb 按 0xBBGGRR 解析）。
+    // 注意2：红白条纹帆船是去夜世界的船，绝不能作为都城入口特征（2026-09-26 曾误采船身导致点错）。
     override val CapitalClanEntryButton = ColorSchema.parse(
-        300, 350, 900, 650, "4D6EFF-101010",
-        "9|6|496AFE-101010,18|-2|4167DC-101010,-27|15|445AD7-101010,-36|29|5072FF-101010,-28|34|4D6DFF-101010,0|42|24486F-101010",
-        0, 0.9, "CapitalClanEntryButton"
+        700, 250, 1150, 600, "4E70FF",
+        "-18|-14|5072FF,-99|63|4D76FF,-126|63|4B68F2,-45|70|071529",
+        0, 0.88, "CapitalClanEntryButton"
     )
 
-    // 都城入口兜底特征：与上面同源同性（源脚本的第二个备选 5173FF 会把岸边蒲公英误判，故不采用）
+    // 都城入口兜底：同一热气球特征、放宽相似度以容忍光照/透视差异。
     override val CapitalClanEntryButton2 = ColorSchema.parse(
-        300, 350, 900, 650, "4D6EFF-101010",
-        "9|6|496AFE-101010,18|-2|4167DC-101010,-27|15|445AD7-101010,-36|29|5072FF-101010,-28|34|4D6DFF-101010,0|42|24486F-101010",
-        0, 0.9, "CapitalClanEntryButton2"
+        700, 250, 1150, 600, "4E70FF",
+        "-18|-14|5072FF,-99|63|4D76FF,-126|63|4B68F2,-45|70|071529",
+        0, 0.82, "CapitalClanEntryButton2"
     )
 
     // Raid "congratulations" panel shown after a raid ends
@@ -271,6 +287,53 @@ object CapitalRaidColors : ICapitalRaidColors {
             "1|-1|0D55A7-101010,2|-2|0D56A8-101010,3|-3|0D54AA-101010,5|-5|0D5AAD-101010,7|-7|125EB1-101010,-1|-4|FCD7A4-101010,0|-5|FDD998-101010",
             0, 0.9, "raidOccupied2"
         )
+
+    // "要立即进攻吗？"确认弹窗：主点 = 底部横幅纯绿 (200,565) RGB(35,122,76)，
+    // 偏移含横幅多点 + 右上大红X (1150,110) RGB(215,16,20)。弹窗居中固定，已真机截图验证命中。
+    override val CapitalAttackConfirm = ColorSchema.parse(
+        0, 0, 1280, 720, "4C7A23",
+        "450|0|4C7A23,700|25|4C7A23,920|47|4C7A23,950|-455|1410D7",
+        0, 0.9, "CapitalAttackConfirm"
+    )
+    // 确认弹窗"进攻"按钮可用（部队已满）：主点 = 按钮亮绿 (1120,405) RGB(215,243,127)，
+    // 深绿下缘 (1080,420) RGB(132,205,44)。
+    override val CapitalAttackConfirmReady = ColorSchema.parse(
+        950, 300, 1280, 500, "7FF3D7",
+        "-40|15|2CCD84",
+        0, 0.88, "CapitalAttackConfirmReady"
+    )
+    // 确认弹窗"进攻"按钮禁用（部队未满）：主点 = 按钮灰 (1120,405) RGB(144,144,144)，
+    // 深色下缘 (1080,420) RGB(36,34,32)。
+    override val CapitalAttackConfirmGray = ColorSchema.parse(
+        950, 300, 1280, 500, "909090",
+        "-40|15|202224",
+        0, 0.88, "CapitalAttackConfirmGray"
+    )
+
+    // 都城地图：选中子城后底部弹出的白色按钮条（侦察绿/进攻/详细信息蓝）。
+    // 主点 = 面板左侧 (300,620) RGB(221,221,213)；偏移含面板中部、右端与蓝色详细信息按钮
+    // (850,630) RGB(107,164,250)。真机截图 district_tapped.png 标定。
+    override val CapitalDistrictBar = ColorSchema.parse(
+        250, 560, 1050, 720, "D5DDDD",
+        "200|10|BCC3C3,680|0|D5DDDD,550|10|FAA46B",
+        0, 0.88, "CapitalDistrictBar"
+    )
+    // 按钮条中的"进攻"按钮灰色（该子城已三星/不可进攻）：主点 (750,640) RGB(191,191,191)，
+    // 深灰文字 (700,630) RGB(92,92,92)。真机截图 district_tapped.png 标定。
+    override val CapitalDistrictAttackGray = ColorSchema.parse(
+        600, 560, 900, 720, "BFBFBF",
+        "-50|-10|5C5C5C",
+        0, 0.88, "CapitalDistrictAttackGray"
+    )
+
+    // 都城地图：选中子城后底部弹出的红色"进攻"按钮条。
+    // 源脚本 L47307 cmpColorEx("66|712|1D1DF5,95|712|8585FD,65|793|201DF5,97|793|8585FD,63|753|1F1DF4,98|756|8585FD", 0.9)
+    // 按映射A (dx,dy)->(dy,-dx) 从竖屏主点 (66,712)->横屏 (712,653) 映射；源项目已稳定运行。
+    override val CapitalBottomAttackBar = ColorSchema.parse(
+        650, 580, 850, 700, "1D1DF5",
+        "0|-29|8585FD,81|1|201DF5,81|-31|8585FD,41|3|1F1DF4,44|-32|8585FD",
+        0, 0.9, "CapitalBottomAttackBar"
+    )
 
     // Raid map boat (waiting for it to appear = the capital map is open)
     override val CapitalRaidMapBoat = ColorSchema.parse(

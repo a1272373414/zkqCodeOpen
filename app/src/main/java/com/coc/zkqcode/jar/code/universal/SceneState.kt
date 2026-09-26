@@ -579,9 +579,23 @@ suspend fun sweepBlockingPopups(): Boolean {
     // （实机命中 (1217,65)）。在这里点它就会把训练页关掉 —— 例如 waitForScene(TRAINING_PAGE)
     // 的每一轮都先清弹窗，训练页会被立刻关掉、永远等不到。所以在训练页上跳过这一分支。
     if (!isTrainingPageOnScreen(screen)) {
-        findMultiColors(byteBuffer = screen, schema = MyColors.RedX, increment = 1)?.let {
+        // 完整红x + 遮挡态红x（右半被侧栏/界面边缘遮挡，如商店界面右上角）都识别
+        findMultiColors(
+            byteBuffer = screen,
+            schema = MyColors.RedX,
+            increment = 1
+        )?.let {
             TouchActions.tap(it.x, it.y, delayTime = 500)
             ShowMessage("已关闭通用弹窗（红x）")
+            return true
+        }
+        findMultiColors(
+            byteBuffer = screen,
+            schema = MyColors.RedXOccluded,
+            increment = 1
+        )?.let {
+            TouchActions.tap(it.x, it.y, delayTime = 500)
+            ShowMessage("已关闭通用弹窗（红x·遮挡态）")
             return true
         }
     }

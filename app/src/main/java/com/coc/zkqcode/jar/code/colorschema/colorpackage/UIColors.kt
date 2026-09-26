@@ -38,6 +38,7 @@ interface IUIColors {
     // Migrated from the legacy freescript UI lookup table (函数275a)
     val PlayerProfileButton: ColorSchema
     val RedX: ColorSchema
+    val RedXOccluded: ColorSchema
     val RedX2: ColorSchema
     val RedX3: ColorSchema
     val RedX4: ColorSchema
@@ -172,9 +173,25 @@ object UIColors : IUIColors {
     // pixel (r=240,g=34,b=39) is written as "2722F0". The legacy freescript's "1511EC" was
     // also red (BGR), but its offset points no longer match the current button, so this is
     // re-derived from the real screenshots.
+    // 真弹窗红x = 红色圆角方块底 + 白色粗X + 暗红下缘。
+    // 踩坑修复（2026-09-26）：旧特征只验证 3x3 纯红块，主世界右上 HUD 的红色元素
+    // （资源条红标签 @(1024,185)、红点角标 @(1255,35) 等）全部误命中，
+    // 点击后游戏把点击当作"点资源条"直接打开了商店。
+    // 新特征从真弹窗截图采样，加入白色X笔画（0|-14、±2|-14）与暗红下缘（0|9）验证，
+    // 已验证：真弹窗红x 命中、主世界 HUD 红色元素零误命中。
     override val RedX = ColorSchema.parse(
-        950, 10, 1270, 230, "2722F0",
-        "-1|-1|2722F0,1|-1|2722F0,-1|1|2722F0,1|1|2722F0,0|1|2722F0,0|-1|2722F0,-1|0|2722F0,1|0|2722F0",
+        950, 10, 1270, 230, "1611D8",
+        "-2|-14|FFFFFF,2|-14|FAF6F6,-17|-5|1511E6,17|-5|1511E9,0|5|261FCC,0|9|110F79",
+        0, 0.88, "红x"
+    )
+    // 遮挡态红x：红x 左侧一小条被侧栏/界面边缘遮挡时（如商店界面右上角，遮挡物黑边在 x≈1220），
+    // 完整特征中指向按钮最左侧的偏移失配。特征只验证可见部分的实际像素组合：
+    // 可见红底(主点) + 其左侧的 X 白笔画(-20|0) + X 中心黑描边 + 暗红下缘 + 弹窗米白边(-40|5)。
+    // 注意：偏移点的方向语义以实际采样为准，不按"左/右半"字面理解。
+    // 已验证：商店遮挡红x 命中 @(1251,60)、主世界 HUD 红点零误命中。
+    override val RedXOccluded = ColorSchema.parse(
+        1000, 10, 1280, 200, "1511EC",
+        "-20|0|FAF6F6,-25|5|2A2A2A,-10|15|211BCE,0|15|211BCE,-20|20|120F8A,-40|5|E2EAEA",
         0, 0.85, "红x"
     )
     // RedX2-9 below are retained from the legacy freescript as extra candidate anchors; the

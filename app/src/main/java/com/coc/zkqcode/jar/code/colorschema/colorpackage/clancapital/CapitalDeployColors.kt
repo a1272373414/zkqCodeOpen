@@ -31,6 +31,11 @@ interface ICapitalDeployColors {
     val CapitalLowHpTargets: List<ColorSchema>
     val CapitalSneakSpellPoints: List<ColorSchema>
     val CapitalSneakFreezePoints: List<ColorSchema>
+    /** 区域1：竖屏(302,438,537,812) → 横屏(438,182,812,417)，源 函数31a 第一轮首选扫描区。 */
+    val CapitalDeployTerrainZone1: List<ColorSchema>
+    /** 区域2：竖屏(225,398,592,866) → 横屏(398,127,866,494)，区域1 点不足 2 个时回退扫描。 */
+    val CapitalDeployTerrainZone2: List<ColorSchema>
+    /** 区域3：竖屏(220,208,625,1030) → 横屏(208,94,1030,499)，源第三回退扫描区（原单区域，向后兼容保留此名）。 */
     val CapitalDeployTerrain: List<ColorSchema>
 }
 
@@ -531,26 +536,25 @@ object CapitalDeployColors : ICapitalDeployColors {
             0, 0.9, "CapitalSneakFreezePoints"
         ),
     )
-    override val CapitalDeployTerrain = listOf(
-        ColorSchema.parse(
-            208, 94, 1030, 499, "68B573",
-            "4|-3|68B574,8|-1|68B673,5|2|67B473,5|-1|68B674",
-            0, 0.98, "CapitalDeployTerrain"
-        ),
-        ColorSchema.parse(
-            208, 94, 1030, 499, "62B16E",
-            "4|-3|5FAD6A,8|0|5FAD6B,5|3|60AF6D,5|0|5FAC6A",
-            0, 0.98, "CapitalDeployTerrain"
-        ),
-        ColorSchema.parse(
-            208, 94, 1030, 499, "6ED893",
-            "-1|0|70DB95,1|0|71DA93",
-            0, 0.98, "CapitalDeployTerrain"
-        ),
-        ColorSchema.parse(
-            208, 94, 1030, 499, "63C88B",
-            "1|-1|66CD8F",
-            0, 0.98, "CapitalDeployTerrain"
-        ),
+    /**
+     * 都城下兵地皮颜色特征（源 颜色js1a 的 4 个颜色，对应深绿色森林边缘的空地）。
+     * 源 函数31a 在三个区域逐级回退扫描（竖屏坐标 302,438,537,812 / 225,398,592,866 / 220,208,625,1030），
+     * 按项目 90° 映射（x'=y, y'=719-x）换算到横屏。
+     */
+    private val terrainColorSpecs = listOf(
+        "68B573" to "4|-3|68B574,8|-1|68B673,5|2|67B473,5|-1|68B674",
+        "62B16E" to "4|-3|5FAD6A,8|0|5FAD6B,5|3|60AF6D,5|0|5FAC6A",
+        "6ED893" to "-1|0|70DB95,1|0|71DA93",
+        "63C88B" to "1|-1|66CD8F",
     )
+    private fun terrainZone(area: IntArray): List<ColorSchema> = terrainColorSpecs.map { (c, off) ->
+        ColorSchema.parse(area[0], area[1], area[2], area[3], c, off, 0, 0.98, "CapitalDeployTerrain")
+    }
+
+    /** 区域1：竖屏(302,438,537,812) → 横屏(438,182,812,417)。 */
+    override val CapitalDeployTerrainZone1: List<ColorSchema> = terrainZone(intArrayOf(438, 182, 812, 417))
+    /** 区域2：竖屏(225,398,592,866) → 横屏(398,127,866,494)。 */
+    override val CapitalDeployTerrainZone2: List<ColorSchema> = terrainZone(intArrayOf(398, 127, 866, 494))
+    /** 区域3：竖屏(220,208,625,1030) → 横屏(208,94,1030,499)，即原来的单区域扫描区（向后兼容）。 */
+    override val CapitalDeployTerrain: List<ColorSchema> = terrainZone(intArrayOf(208, 94, 1030, 499))
 }
