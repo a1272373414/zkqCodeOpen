@@ -33,6 +33,14 @@ interface ICapitalRaidColors {
     val CapitalAttackConfirmGray: ColorSchema
     /** 都城地图：选中子城后底部弹出的白色按钮条（侦察/进攻/详细信息）。 */
     val CapitalDistrictBar: ColorSchema
+    /** 战斗结算界面的绿色"地图"回城按钮（源脚本"回营主"，放弃按钮消失后点击它回都城）。 */
+    val CapitalResultMapButton: ColorSchema
+    /**
+     * 按钮条中的"进攻"按钮 = 红色（该子城可进攻）。
+     * 2026-09-27 实机标定：旧 CapitalDistrictAttackGray（灰特征）在红色可用按钮上也会误命中，
+     * 导致所有子城被误判"不可打"。改为反向判据：红色按钮命中=可打，未命中=灰/不可打。
+     */
+    val CapitalDistrictAttackRed: ColorSchema
     /** 按钮条中的"进攻"按钮 = 灰色（该子城已三星/不可进攻）。 */
     val CapitalDistrictAttackGray: ColorSchema
     /** 都城地图：选中子城后底部弹出的红色"进攻"按钮条（源脚本 L47307 cmpColorEx，映射自竖屏）。 */
@@ -71,6 +79,10 @@ interface ICapitalRaidColors {
     fun raidOccupied2(x1: Int, y1: Int, x2: Int, y2: Int): ColorSchema
     val CapitalRaidMapBoat: ColorSchema
     val CapitalBuildingListMain: ColorSchema
+    /** 都城村庄主界面顶部"部落都城"标签：只在都城主视图出现，区别于主世界/夜世界。 */
+    val CapitalVillageLabel: ColorSchema
+    /** 都城村庄主界面右上角"都城币"图标：金色六边形外框 + 红色六边形内芯，只在都城主视图出现。 */
+    val CapitalGoldIcon: ColorSchema
 }
 
 object CapitalRaidColors : ICapitalRaidColors {
@@ -318,8 +330,28 @@ object CapitalRaidColors : ICapitalRaidColors {
         "200|10|BCC3C3,680|0|D5DDDD,550|10|FAA46B",
         0, 0.88, "CapitalDistrictBar"
     )
+
+    // 战斗结算界面的绿色"地图"回城按钮（源脚本"回营主"）：
+    // 主点 (579,597) RGB(141,209,64)，偏移 (624,597) RGB(141,209,64)、(624,585) 浅色高亮 RGB(185,233,131)、
+    // (624,609) RGB(139,214,59)。2026-09-27 由用户结算截图（72% 摧毁率）标定。颜色串为 BGR。
+    override val CapitalResultMapButton = ColorSchema.parse(
+        500, 540, 760, 680, "40D18D-181818",
+        "45|0|40D18D-181818,0|-12|B9E983-202020,0|12|3BD68B-181818",
+        0, 0.88, "CapitalResultMapButton"
+    )
+    // 按钮条中的"进攻"按钮红色（该子城可进攻）：主点 (760,620) RGB(255,133,135)（红按钮主体亮红），
+    // 偏移 (720,615) RGB(255,143,145) 与 (800,615) RGB(255,134,138) 同为按钮主体。
+    // 2026-09-27 由实机截图标定：红按钮态三点全亮红；灰按钮态同三点为 170~177 均匀灰，区分度完美。
+    // 注意颜色串为 BGR。
+    override val CapitalDistrictAttackRed = ColorSchema.parse(
+        600, 560, 900, 720, "8785FF-181818",
+        "-40|-5|918FFF-181818,40|-5|8A86FF-181818",
+        0, 0.9, "CapitalDistrictAttackRed"
+    )
     // 按钮条中的"进攻"按钮灰色（该子城已三星/不可进攻）：主点 (750,640) RGB(191,191,191)，
     // 深灰文字 (700,630) RGB(92,92,92)。真机截图 district_tapped.png 标定。
+    // 2026-09-27 踩坑：该特征在红色可用按钮上也会误命中（命中点落在按钮上方浅灰带上），
+    // 不可再用作"不可打"判据，保留仅供日志参考；判据请用 CapitalDistrictAttackRed。
     override val CapitalDistrictAttackGray = ColorSchema.parse(
         600, 560, 900, 720, "BFBFBF",
         "-50|-10|5C5C5C",
@@ -347,5 +379,27 @@ object CapitalRaidColors : ICapitalRaidColors {
         503, 85, 806, 113, "FFFFFF-101010",
         "14|0|FFFFFF-101010,29|0|FFFFFF-101010,46|0|FFFFFF-101010,117|0|FFFFFF-101010,127|0|FFFFFF-101010,137|0|FFFFFF-101010,154|0|FFFFFF-101010",
         0, 0.9, "CapitalBuildingListMain"
+    )
+
+    // 都城村庄主界面顶部"部落都城"标签：深色文字+浅蓝底+羊皮纸图标，只在都城主视图出现。
+    // 由 zoom2_base.png 标定：文字@(540,14) RGB(30,36,39)，标签底@(540,16) RGB(184,232,255)，
+    // 羊皮纸@(545,19) RGB(220,220,203)。
+    override val CapitalVillageLabel = ColorSchema.parse(
+        525, 10, 570, 25, "27241E",
+        "5|0|27241E,0|2|FFE8B8,8|2|FFE9AD,5|5|CBDCDC",
+        0, 0.88, "都城村庄标签"
+    )
+
+    // 都城村庄主界面右上角"都城币"图标：外圈金色六边形、中间红色六边形（中心品红 RGB(182,24,224)）。
+    // 由 zoom2_base.png 标定：品红中心@(1235,40) RGB(182,24,224)，金外框@(1245,27) RGB(246,166,15)、
+    // @(1248,30) RGB(245,184,16)、底部@(1235,55) RGB(213,121,21)。
+    // 验证：zoom2/zoom 序列/state4/battle_start3/entry_fail2 等村庄帧全部命中；主世界 zoom3 与
+    // 突袭地图（capital_enter 及 run 录屏 28 帧 boat 帧）全部无命中——仅出现在都城村庄视图，
+    // 不出现在主世界/夜世界/突袭地图层，可作为与左侧军队入口图标并列的都城判定依据。
+    // 注意：颜色串按 BGR 写（ColorSchema.parseBgrToRgb 按 0xBBGGRR 解析）。
+    override val CapitalGoldIcon = ColorSchema.parse(
+        1215, 25, 1255, 62, "E018B6",
+        "-5|-2|E315BA,5|2|DE18B3,0|5|DF16B4,10|-13|0FA6F6,13|-10|10B8F5,0|15|1579D5",
+        0, 0.88, "都城币图标"
     )
 }

@@ -37,6 +37,7 @@ import com.coc.zkqcode.core.data.database.GlobalVars
 import com.coc.zkqcode.jar.ui.schema.Schema.GLOBAL_SETTINGS
 import com.coc.zkqcode.jar.ui.components.CustomAlertDialog
 import com.coc.zkqcode.jar.ui.components.CustomNotificationWindow
+import com.coc.zkqcode.jar.code.universal.InGamesVars
 import com.coc.zkqcode.jar.ui.components.CustomButton
 import com.coc.zkqcode.jar.ui.components.SettingSwitchIcon
 import com.coc.zkqcode.jar.ui.components.SettingDropdown
@@ -108,6 +109,13 @@ fun HomeScreen(
     val saveAndSetPlaying: (Boolean) -> Unit = { play ->
         scope.launch {
             GlobalVars.isPlaying.value = play
+            if (play) {
+                // 用户可能从桌面启动辅助：开始运行前先把游戏拉到前台，避免停在桌面
+                RunShell.runNoOutput(
+                    "am start -n ${InGamesVars.currentGameVersion.launchComponent}",
+                    false
+                )
+            }
             ConfigManager.saveAndRun {
                 onSaveSuccess()
             }
@@ -161,7 +169,12 @@ fun HomeScreen(
         }
     }
 
-    // Auto-Run Timer Logic
+    // Auto-Run Timer Logic: 启动后尽快收起主界面回到游戏（热载覆盖，避免base APK无法更新导致不生效）
+    LaunchedEffect(Unit) {
+        if (GlobalVars.isAutoRunEnabled && GlobalVars.autoRunTimer > 5) {
+            GlobalVars.autoRunTimer = 5
+        }
+    }
     LaunchedEffect(GlobalVars.isAutoRunEnabled, GlobalVars.autoRunTimer) {
         if (GlobalVars.isAutoRunEnabled) {
             delay(1000L)

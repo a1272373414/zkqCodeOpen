@@ -3,8 +3,10 @@ package com.coc.zkqcode.jar.code.clancapital.attack
 import com.coc.zkqcode.core.util.basic.ShowMessage
 import com.coc.zkqcode.core.util.basic.delayWithMultiplier
 import com.coc.zkqcode.core.util.touchactions.TouchActions
+import com.coc.zkqcode.core.system.screencapture.ScreenCaptureManager
 import com.topjohnwu.superuser.Shell
 import com.coc.zkqcode.jar.code.clancapital.saveCapitalScreenshot
+import com.coc.zkqcode.jar.code.clancapital.readCapitalArmyCapacity
 import com.coc.zkqcode.jar.code.clancapital.trainCapitalArmy
 import com.coc.zkqcode.jar.code.colorschema.MyColors
 import com.coc.zkqcode.jar.code.universal.CameraState
@@ -19,6 +21,8 @@ import com.coc.zkqcode.jar.code.universal.sweepBlockingPopups
 import com.coc.zkqcode.jar.code.universal.smalltools.enterMainBase
 import com.coc.zkqcode.jar.code.universal.smalltools.getBooleanConfigRuntime
 import com.coc.zkqcode.jar.code.universal.smalltools.getConfigRuntime
+import com.coc.zkqcode.jar.code.universal.smalltools.killApp
+import com.coc.zkqcode.jar.code.universal.smalltools.runApp
 import com.coc.zkqcode.jar.ui.schema.Schema
 
 /**
@@ -51,15 +55,23 @@ import com.coc.zkqcode.jar.ui.schema.Schema
 // ---------------------------------------------------------------------------------------------
 
 /**
- * True when the camera is on a clan-capital screen.
+ * True when the camera is on the **clan capital main village screen**.
  *
- * The legacy script uses ONE feature for both 左下角回营 and 都城界面 (awcocx_main.lua L37875/L37877),
- * migrated as `MyColors.ClanCapitalEntry`. That button also exists in a normal village, so callers must
- * only ask this AFTER the village / training / battle questions - which is exactly where
- * [com.coc.zkqcode.jar.code.universal.detectCurrentScene] asks it.
+ * 判定只用都城专属 HUD 标记（左侧"军队入口图标"并非都城独有，不能作为依据）：
+ * 1. [MyColors.CapitalVillageLabel] — 顶部居中的"部落都城"标签（工人图标），
+ *    只在都城主视图出现，主世界/夜世界均无。
+ * 2. [MyColors.CapitalGoldIcon] — 右上角"都城币"图标（金外红内六边形），
+ *    只在都城主视图（含缩放各阶段）出现，主世界/夜世界/突袭地图层均无。
  */
-suspend fun isInClanCapital(): Boolean =
-    findMultiColors(schema = MyColors.ClanCapitalEntry, increment = 1) != null
+suspend fun isInClanCapital(): Boolean = isInCapitalVillage()
+
+/**
+ * Dedicated check for the capital main village view, using markers that are unique to it.
+ * The optional [screen] overload lets scene detection reuse an already-captured frame.
+ */
+suspend fun isInCapitalVillage(screen: ScreenCaptureManager.CaptureResult? = null): Boolean =
+    findMultiColors(byteBuffer = screen, schema = MyColors.CapitalVillageLabel, increment = 1) != null ||
+        findMultiColors(byteBuffer = screen, schema = MyColors.CapitalGoldIcon, increment = 1) != null
 
 // ---------------------------------------------------------------------------------------------
 // B2 - enter the capital / open the raid map
@@ -67,6 +79,19 @@ suspend fun isInClanCapital(): Boolean =
 
 /** Raid map button: legacy L94457 `taps(124, 1165)` -> landscape (1165, 595). */
 private val CAPITAL_MAP_BUTTON = intArrayOf(1165, 595)
+
+/**
+ * 本轮都城流程是否已造过兵：造兵是**进攻前的准备工作**，进突袭地图后造一次即可，
+ * 之后每场突袭复用同一支军队，不再重复造兵（用户 2026-09-27 明确）。
+ * 每轮都城流程重新进入都城时（[enterClanCapital] 成功）复位。
+ */
+private var capitalArmyPrepared = false
+
+/**
+ * 入口自愈"重启游戏"已用标记：成功进入都城（isInClanCapital 命中）后复位，
+ * 保证每轮都城流程最多重启一次，避免"找不到→重启→还找不到"造成无限重启游戏。
+ */
+private var entryRestartUsed = false
 
 /**
  * Opens the capital map (tap the map button, then wait for 都城地图小船) - legacy L94457~L94477.
@@ -136,7 +161,13 @@ private suspend fun zoomToCapitalShore() {
  * returns false and the caller decides whether to go back to the main village first.
  */
 suspend fun enterClanCapital(timeoutSeconds: Int = 20): Boolean {
-    if (isInClanCapital()) return true
+    if (isInClanCapital()) {
+        // 已在都城：本轮流程无需再自愈，复位重启标记
+        entryRestartUsed = false
+        return true
+    }
+    // 重新进入都城 = 新一轮流程：造兵准备标志复位（本轮第一场进突袭地图后再造一次兵）
+    capitalArmyPrepared = false
     // 源脚本 函数319a 要求必须在主世界默认场景才能识别都城入口；
     // 若当前在夜世界/训练/其他子界面，先回到主世界。
     if (SceneState.currentScene != GameScene.MAIN_VILLAGE) {
@@ -192,6 +223,31 @@ suspend fun enterClanCapital(timeoutSeconds: Int = 20): Boolean {
         if (enterMainBase()) {
             if (isInClanCapital()) return true
             sweepBlockingPopups()
+            zoomToCapitalShore()
+            entry = findMultiColorsUntil(
+                schemas = listOf(MyColors.CapitalClanEntryButton, MyColors.CapitalClanEntryButton2),
+                duration = 4_000,
+                increment = 1
+            )
+        }
+    }
+    if (entry == null) {
+        // 终极自愈（2026-09-27 实机复现）：上一轮遗留的都城突袭地图等视图会把镜头/平移位置弄乱，
+        // 缩放手势只缩放不复位平移，入口特征永远找不到；重启游戏回到默认镜头后一击命中。
+        // 每轮都城流程最多重启一次（entryRestartUsed），避免"找不到→重启→还找不到"死循环。
+        if (!entryRestartUsed) {
+            entryRestartUsed = true
+            ShowMessage("账号${InGamesVars.currentAccountNumber}，都城：多级重试仍未找到入口，重启游戏恢复镜头后重试")
+            saveCapitalScreenshot("capital_entry_restart")
+            killApp(InGamesVars.currentGameVersion.packageName)
+            delayWithMultiplier(2000)
+            runApp(InGamesVars.currentGameVersion.packageName)
+            recoverToMainScreen(90)
+            sweepBlockingPopups()
+            if (isInClanCapital()) {
+                entryRestartUsed = false
+                return true
+            }
             zoomToCapitalShore()
             entry = findMultiColorsUntil(
                 schemas = listOf(MyColors.CapitalClanEntryButton, MyColors.CapitalClanEntryButton2),
@@ -345,9 +401,6 @@ private val BOTTOM_ATTACK_BUTTON = intArrayOf(754, 641)
 /** Army attack button: legacy L94629 `taps(305, 1054)` -> landscape (1054, 414). */
 private val ARMY_ATTACK_BUTTON = intArrayOf(1054, 414)
 
-/** "Edit capital army" (shown first when the army is empty): legacy L94615 -> landscape (1053, 497). */
-private val EDIT_CAPITAL_ARMY_BUTTON = intArrayOf(1053, 497)
-
 /** How long to wait for the battle to start (legacy L94685 waits 15s in 15 one-second rounds). */
 private const val BATTLE_ENTER_TIMEOUT_MS = 30_000
 
@@ -388,10 +441,13 @@ suspend fun startCapitalBattle(target: CapitalTarget): CapitalBattleStart {
         )
         if (bar == null) return@repeat
         ShowMessage("账号${InGamesVars.currentAccountNumber}，都城：底部按钮条已出现 @(${bar.x},${bar.y})")
-        // 2. "进攻"按钮灰色 = 子城不可打（已三星或正被部落成员进攻）→ 点空白处关按钮条
-        //    （返回键会退出整个都城地图视图导致地图锚点丢失，2026-09-27 踩坑），让调用方换子城
-        if (findMultiColors(schema = MyColors.CapitalDistrictAttackGray, increment = 1) != null) {
-            ShowMessage("账号${InGamesVars.currentAccountNumber}，都城：子城${target.mapIndex}进攻按钮为灰色（已三星或正被部落成员进攻），换下一个子城")
+        // 2. "进攻"按钮红色 = 可打；未命中红色 = 灰色/不可打（已三星或正被部落成员进攻）
+        //    → 点空白处关按钮条（返回键会退出整个都城地图视图导致地图锚点丢失，2026-09-27 踩坑）。
+        //    2026-09-27 修正：旧灰色特征在红色可用按钮上也会误命中（所有子城被误判不可打），
+        //    改为反向判据——以红色按钮特征命中与否为准。
+        val redAttack = findMultiColors(schema = MyColors.CapitalDistrictAttackRed, increment = 1)
+        if (redAttack == null) {
+            ShowMessage("账号${InGamesVars.currentAccountNumber}，都城：子城${target.mapIndex}进攻按钮非红色（已三星或正被部落成员进攻），换下一个子城")
             saveCapitalScreenshot("capital_district_gray")
             TouchActions.tap(640, 180, delayTime = 800)
             return CapitalBattleStart.DISTRICT_UNUSABLE
@@ -406,16 +462,38 @@ suspend fun startCapitalBattle(target: CapitalTarget): CapitalBattleStart {
         val deadline = System.currentTimeMillis() + 15_000L
         while (System.currentTimeMillis() < deadline) {
             if (findMultiColors(schema = MyColors.CapitalAttackConfirm, increment = 1) != null) {
-                // 到达确认弹窗 = 进攻前流程终点。按约定【不点进攻按钮】，识别按钮状态后返回键关闭。
-                val ready = findMultiColors(schema = MyColors.CapitalAttackConfirmReady, increment = 1) != null
+                // 到达确认弹窗。默认行为 = 进攻前流程终点（不点进攻，不消耗突袭次数）；
+                // 开启 CAPITAL_RAID_REAL_ATTACK「都城真打」后且按钮可用 → 真正点击进攻进入战斗。
+                val ready = findMultiColors(schema = MyColors.CapitalAttackConfirmReady, increment = 1)
                 val gray = findMultiColors(schema = MyColors.CapitalAttackConfirmGray, increment = 1) != null
                 val state = when {
-                    ready -> "进攻按钮可用（部队已满）"
+                    ready != null -> "进攻按钮可用（部队已满）"
                     gray -> "进攻按钮灰色（部队未满，不可进攻）"
                     else -> "进攻按钮状态未识别"
                 }
-                ShowMessage("账号${InGamesVars.currentAccountNumber}，都城：已到达开始进攻确认界面（$state），按约定不点进攻，按返回键关闭")
-                saveCapitalScreenshot("capital_attack_confirm")
+                val realAttack = ready != null &&
+                    getBooleanConfigRuntime(Schema.MAIN_BASE_SETTINGS.CAPITAL_RAID_REAL_ATTACK.key)
+                if (realAttack) {
+                    ShowMessage("账号${InGamesVars.currentAccountNumber}，都城：真打模式，点击进攻进入战斗（$state，将消耗 1 次突袭机会）")
+                    saveCapitalScreenshot("capital_attack_go")
+                    TouchActions.tap(ready!!.x, ready.y, delayTime = 1500)
+                    // 点击进攻后等放弃按钮出现 = 真正进入战斗（最多 20 秒）
+                    val fightDeadline = System.currentTimeMillis() + 20_000L
+                    while (System.currentTimeMillis() < fightDeadline) {
+                        if (findMultiColors(schema = MyColors.GiveUpButton, increment = 1) != null) {
+                            ShowMessage("账号${InGamesVars.currentAccountNumber}，都城：已进入战斗（放弃按钮出现）")
+                            return CapitalBattleStart.STARTED
+                        }
+                        delayWithMultiplier(500)
+                    }
+                    // 点击进攻未进战斗：不能重试（可能已被游戏判定开战但画面在加载），返回键关闭后
+                    // 交给调用方按 CONFIRM_REACHED 处理（不换子城、不重复消耗次数）
+                    ShowMessage("账号${InGamesVars.currentAccountNumber}，都城：点击进攻后 20s 未检测到战斗（放弃按钮未出现）")
+                    saveCapitalScreenshot("capital_attack_go_timeout")
+                } else {
+                    ShowMessage("账号${InGamesVars.currentAccountNumber}，都城：已到达开始进攻确认界面（$state），按约定不点进攻，按返回键关闭")
+                    saveCapitalScreenshot("capital_attack_confirm")
+                }
                 pressBack()
                 delayWithMultiplier(1200)
                 return CapitalBattleStart.CONFIRM_REACHED
@@ -432,13 +510,28 @@ suspend fun startCapitalBattle(target: CapitalTarget): CapitalBattleStart {
 }
 
 /**
- * When the capital army is empty the game shows "edit capital army" first: tap it and hand over to
- * [trainCapitalArmy].
+ * 打开"更改都城军队"面板并执行造兵（删兵重造）。
  *
- * @param capitalHallLevel only used as the fallback for the capacity OCR.
+ * 入口从"进攻确认层的编辑按钮"改为"都城内左侧军队入口图标"：
+ * 该图标只在都城村庄视图可见，突袭地图层没有，因此本函数由 [playCapitalRaid] 在
+ * [openCapitalRaidMap] 之前调用。若面板已经打开（例如上次流程残留），则直接训练。
+ *
+ * @param capitalHallLevel 仅作为容量 OCR 失败时的兜底大厅等级。
+ * @return true 当训练流程完成并点了保存。
  */
 suspend fun prepareCapitalArmy(capitalHallLevel: Int): Boolean {
-    TouchActions.tap(EDIT_CAPITAL_ARMY_BUTTON[0], EDIT_CAPITAL_ARMY_BUTTON[1], delayTime = 1500)
+    // 面板已打开时直接训练，避免重复点击入口图标。
+    val panelAlreadyOpen = readCapitalArmyCapacity() != null ||
+        findMultiColors(schema = MyColors.CapitalTrainConfirm, increment = 1) != null
+    if (!panelAlreadyOpen) {
+        val entry = findMultiColors(schema = MyColors.CapitalArmyEntryIcon, increment = 1)
+        if (entry == null) {
+            ShowMessage("账号${InGamesVars.currentAccountNumber}，都城造兵：未找到左侧军队入口图标，可能不在都城村庄视图")
+            return false
+        }
+        ShowMessage("账号${InGamesVars.currentAccountNumber}，都城造兵：点击左侧军队入口图标 @(${entry.x},${entry.y})")
+        TouchActions.tap(entry.x, entry.y, delayTime = 1500)
+    }
     return trainCapitalArmy(capitalHallLevel)
 }
 
@@ -452,6 +545,16 @@ suspend fun finishCapitalBattle(timeoutSeconds: Int = 180): Boolean {
     val deadline = System.currentTimeMillis() + timeoutSeconds * 1000L
     while (System.currentTimeMillis() < deadline) {
         if (findMultiColors(schema = MyColors.GiveUpButton, increment = 1) == null) {
+            // 源 L95405~95417：放弃按钮消失 = 战斗结束，等 3.5 秒让结算界面弹出，
+            // 点结算界面的绿色"地图"按钮（源"回营主"）回都城；此前缺这一步，
+            // 脚本停在结算界面（2026-09-27 实测卡在 72% 结算页不动）。
+            delayWithMultiplier(3500)
+            val resultBtn = findMultiColors(schema = MyColors.CapitalResultMapButton, increment = 1)
+            if (resultBtn != null) {
+                ShowMessage("账号${InGamesVars.currentAccountNumber}，都城：战斗结束，点结算界面地图按钮回城")
+                saveCapitalScreenshot("capital_battle_result")
+                TouchActions.tap(resultBtn.x, resultBtn.y, delayTime = 5000)
+            }
             backToCapitalMap()
             return true
         }
@@ -496,19 +599,20 @@ suspend fun playCapitalRaid(): Boolean {
         ShowMessage("账号${InGamesVars.currentAccountNumber}，都城：进攻次数已用完")
         return false
     }
-    if (!openCapitalRaidMap()) return false
-    // 关键节点截图存档：每号每周仅 5 次突袭机会，进场即留存
-    saveCapitalScreenshot("capital_enter")
-
-    // M4-③ §9.7(5)：攻打前若开启「自动配兵」，先在突袭地图层补齐都城军队（源脚本「首次造兵」逻辑）。
-    // prepareCapitalArmy 内部会点「编辑都城军队」再按等级配兵；军队已满时函数会自动空转返回，无需额外判定。
-    // 注意：坐标/面板判定仍待真机验证（离线无都城战斗截图），故默认关闭，由配置开关控制。
-    if (getBooleanConfigRuntime(Schema.MAIN_BASE_SETTINGS.TRAIN_CAPITAL_ARMY.key)) {
+    // M4-③ §9.7(5)：攻打前若开启「自动配兵」，先补齐都城军队（造兵 = 进攻前准备，本轮只做一次）。
+    // 2026-09-27 用户指正：都城内左侧军队图标可直接打开配兵面板，且该图标只在都城村庄视图可见、
+    // 突袭地图层没有 → 造兵必须放在 openCapitalRaidMap 之前。
+    if (!capitalArmyPrepared && getBooleanConfigRuntime(Schema.MAIN_BASE_SETTINGS.TRAIN_CAPITAL_ARMY.key)) {
         val level = runCatching {
             getConfigRuntime(Schema.MAIN_BASE_SETTINGS.CAPITAL_HALL_LEVEL.key).trim().toIntOrNull() ?: 10
         }.getOrDefault(10)
         prepareCapitalArmy(level)
+        capitalArmyPrepared = true
     }
+
+    if (!openCapitalRaidMap()) return false
+    // 关键节点截图存档：每号每周仅 5 次突袭机会，进场即留存
+    saveCapitalScreenshot("capital_enter")
 
     // 依次尝试子城：星数初筛选出的子城若"进攻"按钮为灰色（已三星/不可打），返回键换下一个
     val tried = mutableSetOf<Int>()

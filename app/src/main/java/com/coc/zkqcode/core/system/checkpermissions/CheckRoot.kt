@@ -1,5 +1,6 @@
 package com.coc.zkqcode.core.system.checkpermissions
 
+import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -105,9 +106,11 @@ fun CheckRootScreen() {
                     GlobalVars.serverActions = ServerActions(serverConnection)
                 }
 
-                // Start the floating window service AFTER serverActions is ready
+                // 在 serverActions 准备就绪后启动悬浮窗 Service
                 val serviceIntent = Intent(context, UIWindowService::class.java)
                 context.startService(serviceIntent)
+                // 把 MainActivity 切到后台，让游戏/桌面露出来；悬浮窗 Service 已在运行，进程不会被杀。
+                (context as? Activity)?.moveTaskToBack(false)
                 // Skip the MediaProjection consent dialog: on this emulator it gets
                 // killed by the system within ~0.8s before any user interaction, so
                 // projection is never granted anyway. Screen capture works through the
@@ -130,6 +133,8 @@ fun CheckRootScreen() {
                         GlobalVars.autoRunTimer = 60
                         GlobalVars.updateWindowPosition = false
                         context.startService(serviceIntent)
+                        // 启动悬浮窗后把引导 Activity 切到后台，避免挡住游戏
+                        (context as? Activity)?.moveTaskToBack(false)
                     }
                 )
             }

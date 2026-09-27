@@ -79,6 +79,10 @@ object MainBaseSettings {
     val TRAIN_CAPITAL_ARMY = SettingDef("train_capital_army", "攻打前自动配兵", 0, "MAIN_BASE_SETTINGS")
     // 都城大本等级：决定配兵方案（≤8 / 9 / 10），同时作为容量读不到时的兜底。默认 10 级（满级容量）。
     val CAPITAL_HALL_LEVEL = SettingDef("capital_hall_level", "都城大本等级", "10", "MAIN_BASE_SETTINGS")
+    // 都城真打调试开关：开启后到达"要立即进攻吗？"确认界面会真正点击"进攻"进入战斗，
+    // 每场消耗 1 次突袭机会（每号每周仅 5 次）。默认关闭=只走到确认界面即按返回键，不消耗次数。
+    val CAPITAL_RAID_REAL_ATTACK =
+        SettingDef("capital_raid_real_attack", "都城真打(消耗突袭次数)", 0, "MAIN_BASE_SETTINGS")
 
     ////////////
     val BUY_STAR_ORE_WITH_RAID_MEDAL =
@@ -195,6 +199,7 @@ object MainBaseSettings {
         START_RAID,
         TRAIN_CAPITAL_ARMY,
         CAPITAL_HALL_LEVEL,
+        CAPITAL_RAID_REAL_ATTACK,
         BUY_STAR_ORE_WITH_RAID_MEDAL,
         BUY_CLOCK_TOWER_POTION_WITH_RAID_MEDAL,
         BUY_RING_OF_WALL_WITH_RAID_MEDAL,

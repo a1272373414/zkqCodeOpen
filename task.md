@@ -42,6 +42,7 @@
 | T05 | 协议弹窗双确认强化 | `jar/code/universal/smalltools/AgreementPopups.kt` | 0.5天 | 高 | 源 函数10a/301a | ⬜ | 腾讯协议双确认 + 谷歌"全部接受" |
 | T06 | 都城部署精炼 + 实机验证 | `jar/code/clancapital/attack/CapitalAttack.kt` | 2天 | 高 | 源 突袭打野 | ⏸ | 用户 2026-09-23 决定延后，先做夜世界 |
 | T22 | 都城突袭补齐：造兵按源两套打法+下兵第二轮扫描+9地图定位+总都城币统计+测试日志截图 | `jar/code/clancapital/*`、`colorschema/colorpackage/clancapital/*` | 2天 | 高 | 源 函数28a/29a/30a/31a + 可打地图 | ✅ | 用户 2026-09-26 要求补齐缺口且造兵方案按源；测试期加日志与截图存档 |
+| T23 | 聊天界面都城友谊战识别与进入（含下兵测试） | `jar/code/clancapital/attack/CapitalFriendlyChat.kt`、`colorschema/colorpackage/clancapital/CapitalFriendlyChatColors.kt`、`jar/code/clancapital/attack/CapitalAttack.kt` | 1天 | 高 | 实机：用户手动发起都城友谊战(不消耗突袭次数)用于都城下兵测试；红框标注于聊天卡片 | 🔄 | ①识别聊天卡片「绿侦察+红进攻+蓝详细信息」三按钮组合(`CapitalFriendlyChatColors`)，`enterCapitalFriendlyFromChat()` 点击红「进攻」进入，实机截图离线自检 0 假阳性；②新增 `playCapitalFriendlyChallenge()` 完整流程(进卡片→等放弃按钮→`capitalDeployArmy` 部署)，挂到 `runTestCode` 调试入口；`capitalDeployArmy` 新增 `zoomOut` 参数(友谊战首跑跳过战斗内缩放，待专项标定)；③下兵/法术颜色(CapitalDeployColors)与逻辑待友谊战实机验证标定 |
 | T07 | 部落竞赛 ClanGames | `jar/code/mainbase/clangames/ClanGames.kt` + Settings + colorpackage | 2天 | 高 | 源 竞赛(135) | ⬜ | 需从 awcocx 反推挑战类型与兵种映射 |
 | T08 | 每周精选/商人购买 | `jar/code/mainbase/trader/Trader.kt` + colors | 1.5天 | 高 | 源 商人(18)+精选(20) | ⬜ | 识别商人页商品→按资源/宝石买周精选 |
 | T09 | 部落战进攻 ClanWar | `jar/code/mainbase/clanwar/ClanWar.kt` | 2天 | 高 | 源 部落战(209) | ⬜ | 复用 MainBaseDeployTroops 部署器 |
@@ -79,6 +80,12 @@
 | T20 | 「橙色转圈卡死」检测误判修复 | `jar/code/universal/smalltools/CheckReconnections.kt` | 0.5天 | 高 | 实机：夜世界「开始进攻」确认弹窗被判网络卡死并重启游戏 | 🔄 | 采样区收窄到中央 (480,280)-(800,440) 避免橙色装饰误入；卡死计时改为**跨循环累计**（原实现单次调用阻塞 12s，导致弹窗白等十几秒后仍被重启）；命中 `AttackNow`/`CancelAttackSearch` 等静止等待界面直接放行并复位计时，待验证 |
 | T21 | swipe 手势误触统一（长按拖建筑 / 被判点击弹「信息」面板） | `core/util/touchactions/TouchActions.kt` + 夜世界/主世界 zoom、收集资源、城墙批量建造调用点 | 0.5天 | 高 | 实机：swipe 起点常压在村庄建筑/城墙上 | 🔄 | `swipe` 是「按下→停顿(delayTime×0.7×倍率)→移动」：停顿过长被判长按拖建筑、过短被判点击选中建筑。默认 300~400ms→150~200ms；各调用点统一 `delayTime=180`（收集资源/夜世界 zoom/主世界 zoom 由 100、120、600、800 统一为 180，城墙批量 600→120）；收集资源盲点后补 `clickRightBottom()` 清掉选中状态，待验证 |
 
+### 文档与梳理（源脚本盘点）
+
+| ID | 任务 | 目标文件 | 工作量 | 优先级 | 依据 | 状态 | 备注 |
+|---|---|---|---|---|---|---|---|
+| T24 | 源脚本全量功能对照文档（逐行归类，可检索） | `docs/源脚本全量功能对照.md` + `tools/scan_lua_skeleton.py` | 1天 | 高 | 用户 2026-09-27 要求 | ✅ | 覆盖 `doc/decrypt/` 全部 6 个 lua（主脚本 56062 行）：21 个分区 + 1067 条「行范围↔功能」条目；扫描器 `tools/scan_lua_skeleton.py` 自动切块，`tools/_lua_scan_out/verify_doc.py` 自检通过（仅 43 个源码空行无功能对应） |
+
 ---
 
 ## 三、决策记录（已明确不抄项，留存追溯）
@@ -92,9 +99,9 @@
 
 ## 四、进度汇总
 
-- 总任务数：22（T01–T22）
-- ✅ 已完成：1（T22）
-- 🔄 进行中：9（T02,T14,T15,T16,T17,T18,T19,T20,T21）
+- 总任务数：24（T01–T24）
+- ✅ 已完成：2（T22,T24）
+- 🔄 进行中：10（T02,T14,T15,T16,T17,T18,T19,T20,T21,T23）
 - ⬜ 待办：11（T01,T03–T05,T07–T13）
 - ⏸ 暂停：1（T06 延后）
 - ❌ 不抄/取消：2（村庄改名、部落靓标签，见决策记录）
@@ -112,6 +119,13 @@
 | 2026-09-26 | T22 | 新建 | 都城突袭补齐：造兵方案按源重写(函数28a/29a两套打法)、下兵补第一轮三区域逐级回退+第二轮滑动视野重扫+9地图目标建筑定位、法术投放点按源区分、总都城币累计统计落盘、关键节点加日志与截图存档 |
 | 2026-09-26 | T22 | 状态 ⟳ | 代码补齐完成（read_lints 0 错误），待真机验证（每号每周仅5次突袭机会，需在真机标定坐标） |
 | 2026-09-27 | T22 | 状态 ⟳ | 真机验证通过：都城入口=热气球浮岛（源 4D6EFF 按 BGR 即热气球橙红，须先缩放归位镜头再找）、进入都城、领币/发起、造兵、按星选子城（正被进攻的子城进攻按钮置灰→正确跳过换下一个）均按预期；验证期不点「进攻」，未消耗突袭次数 |
+| 2026-09-27 | T22 | 真打调试 | 新增 CAPITAL_RAID_REAL_ATTACK 开关（默认关），确认界面「进攻」按钮可用时真打；**修复 CapitalDistrictAttackGray 误判**（红色可用按钮上也会命中灰特征→所有子城被误判不可打，改为 CapitalDistrictAttackRed 正向判据，红/灰区分度完美）；runTestCode 临时改为只跑都城（调试完还原）。**第一场突袭全链路跑通**：选子城(红判据)→底部进攻→确认界面→真打→下兵+法术全下完→战斗结束→回营→统计，摧毁率 25%，消耗 1/5 次；日志+截图存档 temp/capital_debug/run_20260927_0208/。遗留问题：①都城入口定位对镜头初始位置敏感（遗留都城地图视图时反复失败，重启游戏恢复）；②prepareCapitalArmy 时序错位（在地图层点「编辑都城军队」无效，应在进攻确认层造兵）；③边缘 3 点下兵摧毁率仅 25%，待对齐源二轮扫描/9 地图补点优化 |
+| 2026-09-27 | T22 | 真打调试2 | 第二轮真打（第2/3场）暴露并修复：①**造兵每轮重复**→改为进突袭地图后本轮只造一次（用户明确：造兵是进攻前准备）；②**战斗结束不回城**→漏抄源「回营主」，新增 CapitalResultMapButton（用户结算截图标定 RGB(141,209,64)@(579,597)），放弃按钮消失→等3.5s→点它→再回营；③**测试完不停脚本**→runTestCode 改为跑完一轮 setRunControl(STOPPED)，02:34 验证生效；④下兵点收集改回源语义（累计满10个才停，此前满2个就返回导致兵/法术全下一点）。**缩放手势重大踩坑（已回退）**：照抄源 L94829~94847 手搓「双指收拢+swipes+单指拖拽」，实测变成放大且把镜头拖到角落。与已验证的 zoomToCapitalShore 对比：正确写法 = pinchIn(两指→同一收拢点) 或「分步成对 touchMove + 每步 delay 60~80ms + releaseAllPointers」；错误写法 = 单步瞬移到 20px 间距（项目已知坑：20px+瞬移被判单击/选中建筑）+ 两指各自瞬移被拆成两次单指拖动 + 额外 swipes/拖拽。战斗内缩放已暂停使用，待专项标定 |
+| 2026-09-27 | T22 | 真打调试3：删兵重造 | 修复「没有触发删除兵和法术重造」：①`prepareCapitalArmy` 入口从过期的"进攻确认层编辑按钮"(1053,497)改为**都城内左侧军队入口图标**（只在都城村庄视图可见），在 `openCapitalRaidMap` 之前调用；②`CapitalArmyDeleteButton` 特征重标：原 bbox 误匹配顶部军队卡片上的"移除"小红叉，现改为红色垃圾桶按钮左侧红色背景（RGB(222,18,23)，x≈472~488,y≈302~336）；③`CapitalTrainConfirm` 特征与点击点修正：原绿色特征区实际对应"突袭信息"按钮，现用保存按钮红色背景区（x≈625~700,y≈302~336）并直接点特征命中点，避免用过期标定中心；④训练点击加偏移：特征点落在兵种卡右上角"i"信息按钮上，原点击会弹出详情导致造兵无效，现相对特征点左移30、下移40点卡面主体。模拟器验证：进入都城→左图标开面板→删除（250→0）→造超级矿工10次（0→250）+骷髅法术2次+冰冻法术2次→点保存，面板关闭，军队配置生效。**遗留**：野蛮人攻城槌/超级野蛮人/雷电法术特征未匹配（当前屏可见但颜色schema过期），不过超级矿工已填满250军队、骷髅+冰冻填满7法术，不影响出征；下一步需继续修复突袭地图锚点识别与战斗内缩放。 |
+| 2026-09-27 | T22 | 都城主界面识别 | 应用户要求增加都城主界面识别、区别于主世界/夜世界：①新增 `CapitalVillageLabel` 颜色特征（顶部"部落都城"标签：深色文字+浅蓝底+羊皮纸图标，x≈525~570,y≈10~25），在 zoom2_base（都城）自检命中，在 zoom3_base（主世界）与 capital_enter（突袭地图）不自检命中；②`isInClanCapital()` 改为 `isInCapitalVillage()`，同时检测左侧 `CapitalArmyEntryIcon` 与顶部 `CapitalVillageLabel`，任一命中即认为在都城主界面；③`SceneState.detectCurrentScene` 中原来的 `ClanCapitalEntry`（主世界海岸热气球/回营按钮，易造成都城误判）替换为新的 `isInCapitalVillage(screen)`。避免把主世界/夜世界误判为都城。 |
+| 2026-09-27 | T23 | 新建+实现 | 聊天界面都城友谊战：标定红进攻(221EF6)/绿侦察(38CD86)/蓝详细信息(F48439)三按钮组合，新增 `CapitalFriendlyChatColors` 与 `CapitalFriendlyChat.enterCapitalFriendlyFromChat()`；实机聊天截图离线自检 689 命中全在红按钮区、0 假阳性，待真机验证点击进入 |
+| 2026-09-27 | T23 | 实现 | 友谊战下兵测试链路：`playCapitalFriendlyChallenge()`(进卡片→等放弃按钮→`capitalDeployArmy`) 挂到 `runTestCode`；`capitalDeployArmy` 增 `zoomOut` 参数(友谊战首跑跳过战斗内缩放，待标定)；用于实机标定/验证 `CapitalDeployColors` 与下兵逻辑 |
+| 2026-09-27 | T24 | 新建+完成 | 用户要求重新梳理源脚本全部代码并分类存文档：产出 `docs/源脚本全量功能对照.md`（21 分区 / 1067 条行号↔功能条目，覆盖主脚本 56062 行及 bootstrap/TURING/dkjson/hdtyynnn/layout）；配套 `tools/scan_lua_skeleton.py`（切块扫描）、`tools/_lua_scan_out/dump.py`（按 LF 行号打印源码）、`verify_doc.py`（覆盖自检） |
 | 2026-09-23 | T14 | 状态 ⟳ | 开始夜世界任务；T14 → 🔄 进行中 |
 | 2026-09-23 | T14 | 实现 | 新增 `BuilderBaseBattleCopter` 颜色(90°映射 (15,578,500,672))；`normalBattle()` 在战争机器后部署夜飞机落向 deployPos；无 lint 错误，待模拟器验证 |
 | 2026-09-23 | T15 | 实现 | 新增 12 个兵种卡槽颜色(区域 (15,612,1279,677)，偏移 90°旋转)；`normalBattle()` 重构为 `deployAllTroops()`，遍历夜巫/野蛮/其余10兵种逐一点下放空；无 lint 错误，待模拟器验证 |

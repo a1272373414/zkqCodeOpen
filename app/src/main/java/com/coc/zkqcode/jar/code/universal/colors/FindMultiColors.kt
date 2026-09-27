@@ -104,9 +104,11 @@ suspend fun findMultiColors(
  */
 suspend fun findMultiColorsAll(
     schema: ColorSchema,
-    maxMatches: Int = 20
+    maxMatches: Int = 20,
+    byteBuffer: ScreenCaptureManager.CaptureResult? = null
 ): List<Point> {
-    val resultAny = ScreenCaptureManager.capture(asBitmap = false)
+    // 传入 byteBuffer 可复用同一张截图扫描多个 schema，省掉“每个特征各截一次图”的开销
+    val resultAny = byteBuffer ?: ScreenCaptureManager.capture(asBitmap = false)
     val list = mutableListOf<Point>()
     if (resultAny !is ScreenCaptureManager.CaptureResult) return emptyList()
     val buf = resultAny.buffer

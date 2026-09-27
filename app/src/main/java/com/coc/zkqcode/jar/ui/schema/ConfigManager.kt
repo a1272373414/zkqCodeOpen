@@ -93,26 +93,36 @@ object ConfigManager {
     }
 
     /**
-     * Saves all configs to the JSON file via the server.
+     * 保存所有配置到 JSON 文件并通知服务器更新。
+     *
+     * 保存失败不应阻塞辅助运行：UI 当前内存中的 [GlobalVars.configStates] 已经包含最新值，
+     * runBot 读取的也是内存状态。因此即使落盘/通知服务器异常，仍要强制切到 Run 并关闭配置窗口，
+     * 避免用户点了「保存并运行」后悬浮窗卡死在前台。
      */
     suspend fun saveConfigs(onSaveSuccess: () -> Unit = {}) {
-        val baseDir = "${Environment.getExternalStorageDirectory().path}/zkqFiles/"
-        val accountCountStr = GlobalVars.configStates["account_count"]?.value ?: "3"
-        val configCountStr = GlobalVars.configStates["config_count"]?.value ?: "3"
+        try {
+            val baseDir = "${Environment.getExternalStorageDirectory().path}/zkqFiles/"
+            val accountCountStr = GlobalVars.configStates["account_count"]?.value ?: "3"
+            val configCountStr = GlobalVars.configStates["config_count"]?.value ?: "3"
 
-        val accountCount = accountCountStr.toIntOrNull() ?: 3
-        val configCount = configCountStr.toIntOrNull() ?: 3
+            val accountCount = accountCountStr.toIntOrNull() ?: 3
+            val configCount = configCountStr.toIntOrNull() ?: 3
 
-        SchemaExporter.saveSchemaViaServer(
-            baseDir,
-            "zkq_config.json",
-            accountCount = accountCount,
-            configCount = configCount
-        )
+            SchemaExporter.saveSchemaViaServer(
+                baseDir,
+                "zkq_config.json",
+                accountCount = accountCount,
+                configCount = configCount
+            )
+        } catch (e: Exception) {
+            // 仅打印异常，不阻塞后续切 Run / 关闭窗口
+            e.printStackTrace()
+        }
 
         GlobalVars.updateWindowPosition = true
         AppStateManager.setMode(AppMode.Run)
-        onSaveSuccess()//in here, the UI config window is closed, and control window will be shown.
+        // 关闭配置悬浮窗，露出游戏界面；控制悬浮窗随后会由 handleUIIClose 拉起。
+        onSaveSuccess()
     }
 
     /**

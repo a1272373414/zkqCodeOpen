@@ -5,12 +5,23 @@ import com.coc.zkqcode.core.util.basic.RunShell
 import com.coc.zkqcode.core.util.basic.ShowMessage
 import com.coc.zkqcode.core.util.basic.delayWithMultiplier
 import com.coc.zkqcode.core.util.basic.waitForPlay
+import com.coc.zkqcode.core.util.touchactions.TouchActions
 import com.coc.zkqcode.jar.code.builderbase.playBuilderBase
 import com.coc.zkqcode.jar.code.clancapital.playClanCapital
+import com.coc.zkqcode.jar.code.clancapital.attack.playCapitalFriendlyChallenge
+import com.coc.zkqcode.jar.code.clancapital.saveCapitalScreenshot
+import com.coc.zkqcode.jar.code.clancapital.attack.enterClanCapital
+import com.coc.zkqcode.jar.code.clancapital.attack.isInClanCapital
+import com.coc.zkqcode.jar.code.clancapital.attack.openCapitalRaidMap
+import com.coc.zkqcode.jar.code.clancapital.attack.pickCapitalTarget
+import com.coc.zkqcode.jar.code.colorschema.MyColors
+import com.coc.zkqcode.jar.code.universal.colors.findMultiColorsUntil
 import com.coc.zkqcode.jar.code.mainbase.playMainBase
 import com.coc.zkqcode.jar.code.universal.CameraState
+import com.coc.zkqcode.jar.code.universal.GameRunControl
 import com.coc.zkqcode.jar.code.universal.GameVersion
 import com.coc.zkqcode.jar.code.universal.InGamesVars
+import com.coc.zkqcode.jar.code.universal.SceneState
 import com.coc.zkqcode.jar.code.universal.create.batchCreateAccounts
 import com.coc.zkqcode.jar.code.universal.enterMainScreen
 import com.coc.zkqcode.jar.code.universal.handleRunControl
@@ -79,7 +90,9 @@ suspend fun runMainScript() {
     var lastUpdateCheckTime = System.currentTimeMillis()
     var nextUpdateInterval = (2 * 3600_000L) + (Math.random() * 3600_000L).toLong()
     while (currentCoroutineContext().isActive) {
-//        runTestCode()
+        // 临时调试入口（2026-09-27 都城突袭真打调试）：只跑都城流程，跳过夜世界/主世界。
+        // 调试完成后务必还原为注释，恢复正式主循环！
+        runTestCode()
 
         // Phase 4 (reused from legacy 游戏运行控制): act on the current run-control state and
         // bail out if the script was stopped (repeated unknown / fatal state).
@@ -142,12 +155,21 @@ suspend fun runMainScript() {
     }
 }
 
+/**
+ * 临时标定（2026-09-27 删兵重造功能）：走到进攻确认层 → 点"编辑都城军队"打开面板 → 截图存档后停止。
+ * 不点进攻，不消耗突袭次数。用于标定面板上的"删除(垃圾桶)/保存"按钮特征。
+ */
+/**
+ * 临时调试（2026-09-27）：都城友谊战下兵测试。
+ * 不消耗突袭次数：用户在部落聊天手动发起都城友谊战（红框卡片），脚本点击红「进攻」进入战场后部署军队，
+ * 用于标定/验证都城部署颜色（CapitalDeployColors）与下兵逻辑。
+ * 若用户已手动点过进攻、当前就在战场，则跳过点击直接部署。
+ * 调试完成后还原为原测试代码（upgradeGearsAndPets 循环）。
+ */
 private suspend fun runTestCode() {
-    while (true) {
-        upgradeGearsAndPets()
-//        ShowMessage(findMultiColors(MyColors.ElectroOwl).toString())
-        delay(1000000)
-    }
+    playCapitalFriendlyChallenge()
+    ShowMessage("都城友谊战下兵测试结束，停止脚本")
+    SceneState.setRunControl(GameRunControl.STOPPED)
 }
 
 /**

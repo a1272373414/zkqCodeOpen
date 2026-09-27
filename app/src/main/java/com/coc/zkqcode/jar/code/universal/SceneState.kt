@@ -13,6 +13,7 @@ import com.coc.zkqcode.jar.code.colorschema.MyColors
 import com.coc.zkqcode.jar.code.universal.InGamesVars
 import com.coc.zkqcode.jar.code.universal.colors.TemplateMatcher
 import com.coc.zkqcode.jar.code.universal.colors.findMultiColors
+import com.coc.zkqcode.jar.code.clancapital.attack.isInCapitalVillage
 import com.coc.zkqcode.jar.code.universal.smalltools.detectStuckNetworkSpinner
 import com.coc.zkqcode.jar.code.universal.smalltools.isGameAtFront
 import com.coc.zkqcode.jar.code.universal.smalltools.runGame
@@ -278,12 +279,10 @@ private suspend fun detectCurrentSceneInternal(byteBuffer: ScreenCaptureManager.
     //     截图证据：主世界"进攻中"的多张只命中 EndBattle，被旧逻辑判为未知页面并会误按返回键。
     if (isInBattle(screen)) return GameScene.BATTLE
 
-    // 3.5 Clan capital (都城): the bottom-left 回营 / 都城 entry button. It is asked only AFTER the
-    //     village / training / battle questions, because the very same button also exists in a normal
-    //     village (there the village markers above already answered, so it is never ambiguous here).
-    // TODO(待采集)：ClanCapitalEntry 在本部落都城页实测不命中（主色命中但偏移点失配），
-    // 识别都城需要按 A 页重新采集特征；此处先保留，等新特征到位后替换。
-    if (findMultiColors(byteBuffer = screen, schema = MyColors.ClanCapitalEntry, increment = 1) != null) {
+    // 3.5 Clan capital (都城主界面): 使用都城专属 HUD 标记，避免与主世界海岸气球/回营按钮混淆。
+    // [isInCapitalVillage] 同时检查：①左侧军队入口图标（只在都城村庄视图可见）;
+    // ②顶部"部落都城"标签（区别于主世界/夜世界的唯一标志）。
+    if (isInCapitalVillage(screen)) {
         return GameScene.CLAN_CAPITAL
     }
 

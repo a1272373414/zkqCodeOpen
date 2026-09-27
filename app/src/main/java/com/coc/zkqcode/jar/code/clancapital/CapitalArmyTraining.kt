@@ -7,7 +7,9 @@ import com.coc.zkqcode.jar.code.colorschema.ColorSchema
 import com.coc.zkqcode.jar.code.colorschema.MyColors
 import com.coc.zkqcode.jar.code.universal.colors.findMultiColors
 import com.coc.zkqcode.core.util.basic.ShowMessage
+import com.coc.zkqcode.jar.code.universal.InGamesVars
 import com.coc.zkqcode.jar.code.universal.recognizer.PixelFontOcr
+import com.coc.zkqcode.jar.code.universal.sweepBlockingPopups
 
 /**
  * Trains the clan capital army on the clan capital army screen.
@@ -43,10 +45,6 @@ private val SPELL_READOUT = intArrayOf(323, 89, 379, 108)
 
 /** Fallback spell slot count, used only when the spell readout cannot be read. */
 private const val CAPITAL_SPELL_CAPACITY_FALLBACK = 7
-
-// Green confirm button, verified on 都城-配兵01..07 (bbox 761,269-928,334).
-private const val CONFIRM_TAP_X = 844
-private const val CONFIRM_TAP_Y = 301
 
 // The troop list scrolls horizontally; both swipes run along this row.
 private const val LIST_SCROLL_Y = 540
@@ -176,6 +174,30 @@ private suspend fun findTroop(schema: ColorSchema): Point? {
  * @return true when the training was confirmed, false when nothing could be confirmed.
  */
 suspend fun trainCapitalArmy(capitalHallLevel: Int, maxTapsPerStep: Int = 120): Boolean {
+    // 前置：必须真的在都城军队编辑面板（容量 OCR 读数可读 / 完成按钮存在）才继续造兵。
+    // 2026-09-27 踩坑：playCapitalRaid 在突袭地图层提前调用本函数时，"编辑都城军队"按钮并不存在，
+    // 点 (1053,497) 无效，随后 15 类单位逐个"未找到，跳过"刷屏约 75 秒。先等面板最多 6 秒，
+    // 面板没开就直接跳过，只报一行日志。
+    var panelReady = false
+    repeat(6) {
+        if (readCapacity(ARMY_READOUT) != null ||
+            findMultiColors(schema = MyColors.CapitalTrainConfirm) != null
+        ) {
+            panelReady = true
+            return@repeat
+        }
+        delayWithMultiplier(1000)
+    }
+    if (!panelReady) {
+        ShowMessage("账号${InGamesVars.currentAccountNumber}，都城造兵：军队编辑面板未打开（军队已满或不在可造兵界面），跳过造兵")
+        return false
+    }
+
+    // 用户 2026-09-27 要求：删兵重造——先点删除(垃圾桶)按钮清空已编部队，再按方案造，
+    // 最后点"保存"（绿按钮）才生效。
+    clearCapitalArmy()
+    saveCapitalScreenshot("panel_after_clear")
+
     val fallbackTotal = capitalArmyCapacity(capitalHallLevel)
     if (fallbackTotal <= 0) {
         ShowMessage("都城造兵：大厅等级无效，跳过")
@@ -201,6 +223,11 @@ suspend fun trainCapitalArmy(capitalHallLevel: Int, maxTapsPerStep: Int = 120): 
             ShowMessage("都城造兵：${step.name} 未找到，跳过")
             continue
         }
+        // 标定特征点容易落在兵种卡右上角的"i"信息按钮上，直接点会弹出详情而非加兵。
+        // 改为点卡面中下区域：相对特征点左移 30、下移 40，避开信息按钮并落在可点加的卡面主体。
+        val tapX = (point.x - 30).coerceIn(131, 1140)
+        val tapY = (point.y + 40).coerceIn(396, 679)
+        ShowMessage("都城造兵：${step.name} 特征@${point.x},${point.y}，实际点击@$tapX,$tapY")
         val readout = if (step.isSpell) SPELL_READOUT else ARMY_READOUT
         val fallback = if (step.isSpell) CAPITAL_SPELL_CAPACITY_FALLBACK else fallbackTotal
         var taps = 0
@@ -215,7 +242,7 @@ suspend fun trainCapitalArmy(capitalHallLevel: Int, maxTapsPerStep: Int = 120): 
                 is TrainTarget.Fill -> used >= total
             }
             if (done) break
-            TouchActions.tap(point.x, point.y, delayTime = 50)
+            TouchActions.tap(tapX, tapY, delayTime = 50)
             taps++
             // 源 dczbdj：配额不足时点击无效（容量不增），立即停止该兵种，避免空点
             delayWithMultiplier(60)
@@ -226,12 +253,54 @@ suspend fun trainCapitalArmy(capitalHallLevel: Int, maxTapsPerStep: Int = 120): 
         ShowMessage("都城造兵：${step.name} 已造 $taps 次（容量 ${readCapacity(readout)?.used ?: 0}/${readCapacity(readout)?.total ?: fallback}）")
     }
 
-    if (findMultiColors(schema = MyColors.CapitalTrainConfirm) == null) {
-        ShowMessage("都城造兵：未找到完成按钮，造兵可能失败")
-        return false
+    // 造完必须点"保存"按钮才生效。CapitalTrainConfirm 即该按钮（红色，位于面板右下区域）。
+    // 2026-09-27 用户指正：之前造完没点保存导致配置不生效。这里直接点特征命中点，避免用
+    // 过期标定中心(CONFIRM_TAP_X/Y)漏点；找不到特征时退化为点右上角关闭(✕)按钮，面板关闭即自动保存。
+    saveCapitalScreenshot("panel_before_save")
+    val save = findMultiColors(schema = MyColors.CapitalTrainConfirm, increment = 1)
+    if (save != null) {
+        TouchActions.tap(save.x, save.y, delayTime = 1000)
+        delayWithMultiplier(500)
+        ShowMessage("都城造兵：已点保存（@${save.x},${save.y}），军队配置生效，等待刷新")
+        return true
     }
-    TouchActions.tap(CONFIRM_TAP_X, CONFIRM_TAP_Y, delayTime = 1000)
+    // 兜底：点面板右上角"✕"关闭按钮（约 895,58），关闭面板会自动保存已编部队。
+    ShowMessage("都城造兵：未找到保存按钮，退化点关闭按钮（895,58）兜底")
+    TouchActions.tap(895, 58, delayTime = 1000)
     delayWithMultiplier(500)
-    ShowMessage("都城造兵：已点完成，等待刷新")
     return true
+}
+
+/**
+ * 点面板里的红色删除(垃圾桶)按钮清空已编部队（用户 2026-09-27 要求的"删兵重造"第一步）。
+ *
+ * 校验方式：删除后 OCR 容量读数，used 归零才算成功；未归零则清一次可能的确认弹窗后
+ * 再点一次删除，最多重试 3 次。清空失败不阻断流程（后续按配额补造仍能把军队配满）。
+ */
+private suspend fun clearCapitalArmy() {
+    val before = readCapacity(ARMY_READOUT)?.used
+    if (before == 0) {
+        ShowMessage("都城造兵：部队已为空，无需删除")
+        return
+    }
+    repeat(3) { attempt ->
+        val del = findMultiColors(schema = MyColors.CapitalArmyDeleteButton, increment = 1)
+        if (del == null) {
+            ShowMessage("都城造兵：未找到删除按钮（第${attempt + 1}次）")
+            return
+        }
+        TouchActions.tap(del.x, del.y, delayTime = 1500)
+        delayWithMultiplier(1000)
+        val used = readCapacity(ARMY_READOUT)?.used
+        if (used == 0) {
+            ShowMessage("都城造兵：已清空部队（删除前 used=$before）")
+            return
+        }
+        // 可能弹出了确认框：清理弹窗后再重试
+        if (attempt < 2) {
+            sweepBlockingPopups()
+            delayWithMultiplier(500)
+        }
+    }
+    ShowMessage("都城造兵：点删除后部队未清空（used=${readCapacity(ARMY_READOUT)?.used}），继续按配额补造")
 }

@@ -27,6 +27,9 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "BASE_URL", "\"$baseUrl\"")
+        // 每次构建自动注入唯一构建号(版本名+版本号+构建时间戳)，便于日志核对“装的是哪次构建”
+        val buildId = "${versionName}(${versionCode})@" + System.currentTimeMillis()
+        buildConfigField("String", "BUILD_ID", "\"$buildId\"")
     }
 
     buildTypes {
