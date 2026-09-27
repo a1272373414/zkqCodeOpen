@@ -26,3 +26,9 @@ Debug Environment Rules
 Emulator: Always use emulator-5556 for adb commands (screencap, input tap, install, etc.). Specify -s emulator-5556 when needed.
 
 Modification Rules: Only modify the specified feature. Do not make extra changes. Only provide suggestions without implementing them unless asked.
+
+Temporary File Rules
+临时文件目录: 所有临时文件（调试截图、日志抓取、试验脚本、解压产物、扫描输出等）一律放在项目根目录的 temp/ 下，不要散落在 tools/、app/ 或其他目录。
+按日期分组: temp/ 下按文件产生日期建立 YYYY-MM-DD/ 子目录归档，例如 temp/2026-09-28/infolog.txt。
+及时清理: 确认无用的临时文件（一次性解压产物、空日志、重复副本、__pycache__ 等）直接删除，不要长期堆积。
+不入库: temp/ 已在 .gitignore 中忽略，提交代码时不要把临时文件加入版本库。
