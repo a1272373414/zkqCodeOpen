@@ -119,10 +119,6 @@ object ShellScreenCapture {
                 val result = captureViaPng(stdin, stdout, asBitmap)
 
                 if (result != null) {
-                    // 用完即断：持久 shell 的输出流会残留上一次的 PNG 数据，
-                    // 后续捕获会读到陈旧画面（实测整个会话都停在第一帧）。
-                    // 每次捕获成功后立即关闭连接，下次重新拉起 su 拿实时画面。
-                    synchronized(connectionLock) { closeConnectionLocked() }
                     return result
                 }
 
@@ -134,6 +130,9 @@ object ShellScreenCapture {
         }
         return null
     }
+
+    /** 捕获命令序号：每条命令唯一，用于识别输出流里的陈旧帧。 */
+    private var commandSeq = 0
 
     // ======================== PNG screencap ========================
 
@@ -147,12 +146,33 @@ object ShellScreenCapture {
         stdout: InputStream,
         asBitmap: Boolean
     ): Any? {
-        stdin.write("screencap -p\n".toByteArray())
+        // 每条命令带唯一序号标记：读完 PNG 后必须读到**本序号**的标记行才算拿到本次实时画面。
+        // 持久 shell 的输出流若残留上一次未消费的 [PNG+标记]，序号不匹配就跳过继续读，
+        // 避免返回陈旧帧；同时保持持久连接（不反复起 su 进程，否则 Magisk 每次都弹授权提示）。
+        commandSeq++
+        val marker = "__ZKQ_CAP_${commandSeq}__"
+        stdin.write("screencap -p; echo $marker\n".toByteArray())
         stdin.flush()
 
-        val pngBytes = readPngFromStream(stdout)
+        var pngBytes: ByteArray? = null
+        var matched = false
+        // 注意必须用 for+break：repeat 里的 return@repeat 是 continue 而不是 break，
+        // 匹配成功后继续循环会阻塞在下一个 readPngFromStream 上（等永远不来的输出）
+        for (attempt in 0 until 3) {
+            pngBytes = readPngFromStream(stdout)
+            val line = readLineUntilNewline(stdout)
+            if (line.trim() == marker) {
+                matched = true
+                break
+            }
+            // 标记序号不匹配 → 刚读到的 PNG 是流里残留的陈旧输出，丢弃并继续读下一个
+        }
+        val data = pngBytes
+        if (!matched || data == null) {
+            throw IOException("screencap marker not matched (stale stream?)")
+        }
 
-        val bitmap = BitmapFactory.decodeByteArray(pngBytes, 0, pngBytes.size)
+        val bitmap = BitmapFactory.decodeByteArray(data, 0, data.size)
             ?: return null
 
         if (asBitmap) return bitmap
@@ -168,6 +188,18 @@ object ShellScreenCapture {
         bitmap.recycle()
 
         return ScreenCaptureManager.CaptureResult(buffer, width, height, pixelStride, rowStride)
+    }
+
+    /** 逐字节读一行（到 '\n' 为止），用于消费命令结束标记。 */
+    private fun readLineUntilNewline(stream: InputStream): String {
+        val sb = StringBuilder()
+        while (true) {
+            val b = stream.read()
+            if (b == -1) throw IOException("Stream closed while reading capture marker")
+            if (b == '\n'.code) break
+            sb.append(b.toChar())
+        }
+        return sb.toString()
     }
 
     /**

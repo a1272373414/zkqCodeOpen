@@ -36,7 +36,12 @@ object LogHelper {
     /** 清理过期日志时的锁，避免与写入并发产生竞争。 */
     private val cleanupLock = Any()
 
+    /** 保证 Timber 只种一次：App 进程里 MainActivity 与 DaemonService 都会调 [initTimber]，
+     *  重复 plant FileLoggingTree 会导致**每条日志被写两遍**（实测日志成对重复）。 */
+    private val timberPlanted = AtomicBoolean(false)
+
     fun initTimber(context: Context) {
+        if (!timberPlanted.compareAndSet(false, true)) return
         // 启动时先清一次过期日志，避免历史文件堆积
         cleanupExpiredLogs(context)
         if (BuildConfig.DEBUG) {
@@ -166,9 +171,10 @@ object LogHelper {
                     rotate(logDir, base, hour)
                 }
 
-                // 定期清理（跨小时时必清一次，日志稀疏时靠间隔兜底）
-                if (System.currentTimeMillis() - lastCleanupAt > CLEANUP_INTERVAL_MS) {
-                    cleanupExpiredLogs(context)
+                // 定期清理（跨小时时必清一次，日志稀疏时靠间隔兜底）。
+                // FileLoggingTree 是嵌套类，访问外层对象成员需加 LogHelper. 限定符。
+                if (System.currentTimeMillis() - LogHelper.lastCleanupAt > LogHelper.CLEANUP_INTERVAL_MS) {
+                    LogHelper.cleanupExpiredLogs(context)
                 }
 
                 try {

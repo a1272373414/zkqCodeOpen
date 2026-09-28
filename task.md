@@ -68,7 +68,7 @@
 | ID | 任务 | 目标文件(当前项目) | 工作量 | 优先级 | 源依据 | 状态 | 备注 |
 |---|---|---|---|---|---|---|---|
 | T10 | 联赛 CWL 进攻 | `jar/code/mainbase/league/League.kt` | 1天 | 中 | 源 联赛(67) 函数183a·打联赛战 L21543-21593 + 函数331a·联赛选敌 L22899-22916 | ✅ | 新建 `League.leagueAttack(account)`：读 `LEAGUE_WAR_ENABLED` 开关→进部落→切「联赛」标签(locate)→判进攻机会(locate「进攻」)→选敌开战→**下兵复用主世界 `mainBaseDeployTroops()`**→等放弃按钮。对位选敌(源 OCR 名次对齐)简化为首个可进攻敌营，待 T30 复标。挂在 `MainScript`。`buildJar` 通过、0 lint |
-| T11 | 中文玩家名 OCR | `jar/code/.../recognizer/PixelFontChinese.kt` + `tools/harvest_chinese_font.py` | 2天 | 中 | 源 函数21a | 🔄 | 已拆分为 **T31–T34**（见「中文识别（T11 拆分）」章节）；**源脚本并不存在 font_chinese**（全库 grep `chinese/中文/hanzi/汉字` 均 0 命中，函数21a 实际是数字库），故改为"ML Kit 中文为主 + 像素字库兜底" |
+| T11 | 中文玩家名 OCR | `jar/code/.../recognizer/PixelFontChinese.kt` + `tools/harvest_chinese_font.py` | 2天 | 中 | 源 函数21a | ✅ | 已拆分为 **T31–T34**（全部完成，2026-09-29 收尾置 ✅）；**源脚本并不存在 font_chinese**（全库 grep `chinese/中文/hanzi/汉字` 均 0 命中，函数21a 实际是数字库），故改为"ML Kit 中文为主 + 像素字库兜底" |
 
 ### 中文识别（T11 拆分）
 

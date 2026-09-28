@@ -70,10 +70,21 @@ private const val SLOT_SPACING = 101.6f
 private fun slotCenterX(cardX: Int): Int =
     Math.round(SLOT_FIRST_CENTER + SLOT_SPACING * Math.round((cardX - SLOT_FIRST_CENTER) / SLOT_SPACING))
 
-/** 把任意横坐标换算成卡位号（1~8，落在卡栏外返回 0）。 */
+/**
+ * 把任意横坐标换算成卡位号：**0=英雄卡，1~10=兵卡**，落在卡栏外返回 -1。
+ *
+ * 夜世界部署栏实测共 11 个物理卡位（0=英雄/战争机器，1~10=兵，间距约 101.6，
+ * 首位兵卡中心约 222，打到第二区域会多出最后两个卡位）。
+ * 旧实现只认 1~8：①英雄卡(x≈128)被判成 0（与"卡栏外"同值）导致诊断文本误导；
+ * ②卡位 9/10(x≈1059/1161)被判无效，使 [exhaustedSlots] 对最后两张卡失效。
+ */
 private fun slotIndex(x: Int): Int {
     val i = Math.round((x - SLOT_FIRST_CENTER) / SLOT_SPACING) + 1
-    return if (i in 1..8) i else 0
+    return when {
+        i < 1 -> 0      // 英雄卡（卡位 0）
+        i <= 10 -> i    // 兵卡 1~10
+        else -> -1      // 卡栏外
+    }
 }
 
 /**
@@ -85,7 +96,7 @@ private fun slotIndex(x: Int): Int {
  *   ③ 英雄技能（点在英雄卡槽上）。
  * 把它统一记到卡位号上，就能一眼看出"哪个卡位被点了几次、分别是谁点的"。
  */
-private val slotTapCount = IntArray(9)
+private val slotTapCount = IntArray(11)
 
 /** 技能轮询的最长时长（毫秒）：兜底，避免战斗异常时卡在这里不出。 */
 /**
@@ -150,9 +161,12 @@ suspend fun releaseSkillsLoop() {
 /** 记录一次"点卡槽"，带上卡位号与本局累计次数。 */
 private fun logSlotTap(what: String, x: Int, y: Int) {
     val idx = slotIndex(x)
-    if (idx in 1..8) slotTapCount[idx]++
-    val prefix = if (idx in 1..8) "点卡诊断：$what @($x,$y) → 卡位#$idx 本局第 ${slotTapCount[idx]} 次"
-    else "点卡诊断：$what @($x,$y) → 卡栏外"
+    if (idx in 0..10) slotTapCount[idx]++
+    val prefix = when {
+        idx == 0 -> "点卡诊断：$what @($x,$y) → 英雄卡 本局第 ${slotTapCount[0]} 次"
+        idx in 1..10 -> "点卡诊断：$what @($x,$y) → 卡位#$idx 本局第 ${slotTapCount[idx]} 次"
+        else -> "点卡诊断：$what @($x,$y) → 卡栏外"
+    }
     accountLog(prefix)
 }
 

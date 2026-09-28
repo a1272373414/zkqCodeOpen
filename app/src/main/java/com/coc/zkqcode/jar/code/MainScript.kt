@@ -103,9 +103,9 @@ suspend fun runMainScript() {
     var lastUpdateCheckTime = System.currentTimeMillis()
     var nextUpdateInterval = (2 * 3600_000L) + (Math.random() * 3600_000L).toLong()
     while (currentCoroutineContext().isActive) {
-        // 临时调试入口（2026-09-27 都城突袭真打调试）：只跑都城流程，跳过夜世界/主世界。
-        // 调试完成后务必还原为注释，恢复正式主循环！
-        runTestCode()
+        // 临时调试入口（2026-09-27 都城突袭真打调试）：已验证完毕，2026-09-29 恢复正式主循环。
+        // 如需再开调试，把下一行取消注释即可（只跑都城友谊战流程，跳过夜世界/主世界）。
+        // runTestCode()
 
         // Phase 4 (reused from legacy 游戏运行控制): act on the current run-control state and
         // bail out if the script was stopped (repeated unknown / fatal state).
