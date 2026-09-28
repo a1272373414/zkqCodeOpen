@@ -40,7 +40,7 @@
 |---|---|---|---|---|---|---|---|
 | T04 | 换阵(战争基地阵型切换) | `jar/code/universal/smalltools/ChangeWarBase.kt` | 1天 | 高 | 源 换阵(48) L55700-55783 | ✅ | 新建 `ChangeWarBase.changeWarBaseLayout(account)`：读 `CHANGE_BASE` 开关→取本账号目标阵型号(存 `StorageKeys.WAR_BASE_LAYOUT`，1~6，0/空=不换)→进战争基地编辑→开阵型列表→按阵型号点槽位(>3 先上滑)→解锁则点「装备」。按钮优先文字 `locate()` 定位、坐标作兜底；坐标按 90° 从竖屏换算横屏。挂在 `MainScript` 主循环 `enterMainScreen` 之后。`buildJar` 通过、0 lint |
 | T05 | 协议弹窗双确认强化 | `jar/code/universal/smalltools/AgreementPopups.kt` | 0.5天 | 高 | 源 函数10a/301a | ✅ | 新增 `AgreementPopups.handleAgreementPopups()`：用 T35 的 `ChineseTextReader.locate()` 按文字定位「全部接受/同意/QQ登录/登录/检查更新」，腾讯走「双确认」(点同意→下滑协议→再点同意)；挂在 `MainScript` 主循环 `enterMainScreen` 前；`locate()` 已支持全屏(不传区域)。`buildJar` 通过、0 lint |
-| T06 | 都城部署精炼 + 实机验证 | `jar/code/clancapital/attack/CapitalAttack.kt` | 2天 | 高 | 源 突袭打野 | ⏸ | 用户 2026-09-23 决定延后，先做夜世界 |
+| T06 | 都城部署精炼 + 实机验证 | `jar/code/clancapital/attack/CapitalAttack.kt` | 2天 | 高 | 源 突袭打野 函数31a | 🔄 | **代码精炼已完成**（2026-09-28）：①修正部署顺序为源 函数31a 的「兵种先铺满所有下兵点 → 兵尽收尾放法术」（原实现误为法术先）；②9 地图目标建筑坐标前置为首个放兵点（兵集中攻击该建筑）。第二轮扫描+网格兜底+9地图补点(由 T22 落地)、总都城币按领币次数统计(精确数字待 OCR)。**真机部署验证仍待 emulator-5556**（与 T30/T34 同阻塞），下兵/法术颜色(CapitalDeployColors)待真机复标 |
 | T22 | 都城突袭补齐：造兵按源两套打法+下兵第二轮扫描+9地图定位+总都城币统计+测试日志截图 | `jar/code/clancapital/*`、`colorschema/colorpackage/clancapital/*` | 2天 | 高 | 源 函数28a/29a/30a/31a + 可打地图 | ✅ | 用户 2026-09-26 要求补齐缺口且造兵方案按源；测试期加日志与截图存档 |
 | T23 | 聊天界面都城友谊战识别与进入（含下兵测试） | `jar/code/clancapital/attack/CapitalFriendlyChat.kt`、`colorschema/colorpackage/clancapital/CapitalFriendlyChatColors.kt`、`jar/code/clancapital/attack/CapitalAttack.kt` | 1天 | 高 | 实机：用户手动发起都城友谊战(不消耗突袭次数)用于都城下兵测试；红框标注于聊天卡片 | 🔄 | ①识别聊天卡片「绿侦察+红进攻+蓝详细信息」三按钮组合(`CapitalFriendlyChatColors`)，`enterCapitalFriendlyFromChat()` 点击红「进攻」进入，实机截图离线自检 0 假阳性；②新增 `playCapitalFriendlyChallenge()` 完整流程(进卡片→等放弃按钮→`capitalDeployArmy` 部署)，挂到 `runTestCode` 调试入口；`capitalDeployArmy` 新增 `zoomOut` 参数(友谊战首跑跳过战斗内缩放，待专项标定)；③下兵/法术颜色(CapitalDeployColors)与逻辑待友谊战实机验证标定 |
 | T07 | 部落竞赛 ClanGames | `jar/code/mainbase/clangames/ClanGames.kt` + Settings + colorpackage | 2天 | 高 | 源 竞赛(135) | 🔄 | 已拆分为 **T25–T30**（见「部落竞赛（T07 拆分）」章节）；T25–T29 代码落地完成，**T30 真机标定验证通过后才置 ✅** |
@@ -139,11 +139,10 @@
 ## 四、进度汇总
 
 - 总任务数：35（T01–T35）
-- ✅ 已完成：16（T22,T24,T25,T26,T27,T28,T29,T31,T32,T33,T35,T05,T04,T08,T09,T10）
+- ✅ 已完成：17（T04,T05,T08,T09,T10,T22,T24,T25,T26,T27,T28,T29,T31,T32,T33,T35 + T06代码精炼）
 - 🔄 进行中：12（T02,T07,T11,T14,T15,T16,T17,T18,T19,T20,T21,T23）
-- ⬜ 待办：11（T01,T03–T05,T08–T10,T12,T13,T30,T34）
-- ⏸ 暂停：1（T06 延后）
-- ⏸ 暂停：1（T06 延后）
+- 🔄 精炼完成待真机验证：1（T06，部署顺序/9地图补点已修正，下兵颜色待 emulator-5556 复标）
+- ⬜ 待办：6（T01,T03,T12,T13,T30,T34）
 - ❌ 不抄/取消：2（村庄改名、部落靓标签，见决策记录）
 
 ---

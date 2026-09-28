@@ -283,9 +283,10 @@ suspend fun capitalDeployArmy(
         swipeCapitalView()
         // 第二轮扫描结果为可变列表，便于按 9 地图定位追加目标建筑放兵点
         val second = collectDeployPoints().toMutableList()
-        // 9 地图定位：把本次选择的子城目标建筑坐标（横屏 x,y）加入放兵点
+        // 9 地图定位：把本次选择的子城目标建筑坐标（横屏 x,y）加入放兵点，并**前置为第一个**，
+        // 使兵种优先集中攻击该建筑（源 函数31a「把选中的子城目标建筑坐标作为放兵点」）
         target?.let { t ->
-            if (second.none { it.x == t.x && it.y == t.y }) second.add(Point(t.x, t.y))
+            if (second.none { it.x == t.x && it.y == t.y }) second.add(0, Point(t.x, t.y))
         }
         if (second.isNotEmpty()) {
             points = second
@@ -301,7 +302,13 @@ suspend fun capitalDeployArmy(
     }
 
     var acted = false
-    // 先放法术：法术先铺场（中心区域），兵再跟进到各下兵点，避免兵先占满后法术落点被挤到边角
+    // 源 函数31a 部署顺序：兵种先铺满所有下兵点 → 「有兵再来一轮」→ 「兵尽收尾放法术」。
+    // 故先部署兵种（每轮把当前可用兵种在所有点打一遍），最后再放法术（骷髅/疗伤/弹跳/雷电/冰冻）。
+    for (schema in DEPLOY_TROOPS) if (deployTroop(points, schema)) {
+        acted = true
+        ShowMessage("账号${InGamesVars.currentAccountNumber}，都城：兵种已下场 ${schema.name}")
+    }
+    // 兵尽收尾放法术：法术铺在战场（中心区域或残血/偷袭法术下兵点），不再占用下兵点
     for (plan in DEPLOY_SPELLS) {
         val pre = findMultiColors(plan.schema)
         Timber.tag("zkq_debug").v("ZKQDBG:法术预判[${plan.schema.name}] findMultiColors=${pre?.let { "(${it.x},${it.y})" } ?: "null"}")
@@ -309,10 +316,6 @@ suspend fun capitalDeployArmy(
             acted = true
             ShowMessage("账号${InGamesVars.currentAccountNumber}，都城：法术已投放 ${plan.schema.name}")
         }
-    }
-    for (schema in DEPLOY_TROOPS) if (deployTroop(points, schema)) {
-        acted = true
-        ShowMessage("账号${InGamesVars.currentAccountNumber}，都城：兵种已下场 ${schema.name}")
     }
     saveCapitalScreenshot("capital_battle_deployed")
     return acted
