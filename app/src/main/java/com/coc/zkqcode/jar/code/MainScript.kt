@@ -39,6 +39,10 @@ import com.coc.zkqcode.jar.code.mainbase.league.League
 import com.coc.zkqcode.jar.code.mainbase.troop.TrainTroops
 import com.coc.zkqcode.jar.code.mainbase.upgrade.Upgrade
 import com.coc.zkqcode.jar.code.mainbase.clan.donateToClan
+import com.coc.zkqcode.jar.code.mainbase.daily.DailyRewards
+import com.coc.zkqcode.jar.code.mainbase.clan.CapitalCoinDonate
+import com.coc.zkqcode.jar.code.mainbase.clan.ClanApprove
+import com.coc.zkqcode.jar.code.mainbase.buildings.PlaceNewBuilding
 import com.coc.zkqcode.core.util.fileactions.LogHelper.logAndRestart
 import com.coc.zkqcode.jar.code.mainbase.herohall.upgradeGearsAndPets
 import com.coc.zkqcode.jar.code.mainbase.others.mainBaseCheckTutorials
@@ -139,6 +143,18 @@ suspend fun runMainScript() {
 
             // 升级建筑（T13）：UPGRADE_ENABLED 开启且本账号配置了目标建筑时执行
             Upgrade.upgradeBuildings(InGamesVars.currentAccountNumber)
+
+            // 每日福利领取（T41）：DAILY_REWARDS_ENABLED 开启且本账号开启对应子项时执行
+            DailyRewards.claimDailyRewards(InGamesVars.currentAccountNumber)
+
+            // 都城币捐（T39）：CAPITAL_COIN_DONATE_ENABLED 开启时执行
+            CapitalCoinDonate.donateCapitalCoins(InGamesVars.currentAccountNumber)
+
+            // 审批入群（T40）：CLAN_APPROVE_ENABLED 开启时执行
+            ClanApprove.approveClanRequests(InGamesVars.currentAccountNumber)
+
+            // 放置新建筑（T38）：PLACE_BUILDING_ENABLED 开启且本账号配置了目标建筑时执行（宝石秒升级不做）
+            PlaceNewBuilding.placeNewBuilding(InGamesVars.currentAccountNumber)
 
             if (!playBuilderBase()) {
                 ShowMessage("夜世界对战完成，准备进入主世界")

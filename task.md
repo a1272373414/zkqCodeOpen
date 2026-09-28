@@ -29,7 +29,7 @@
 
 | ID | 任务 | 目标文件(当前项目) | 工作量 | 优先级 | 源依据 | 状态 | 备注 |
 |---|---|---|---|---|---|---|---|
-| T01 | 坐标归一化集成 pass | `app/.../zkqcode/jar` CoordNormalizer 集成 | 1天 | 低 | 源 r()/b() | ⬜ | 把散落硬编码字面量替换为归一化调用 |
+| T01 | 坐标归一化集成 pass | `app/.../zkqcode/jar` CoordNormalizer 集成 | 1天 | 低 | 源 r()/b() | ⏭ | 机制 `CoordNormalizer` 已写好但未接线；当前截屏即真机原分辨率、运行环境固定 1280×720，归一化收益≈0。用户 2026-09-28 决定**跳过**整轮字面量替换 pass，留作多分辨率/真机直连备用（需要时按「边界归一化」接 `init()` + 让 touchDown/取色入口内部乘 scale） |
 | T02 | NCC 接入 OCR pipeline | `NccMatcher.kt` 接线 | 1天 | 低 | 源 ncc.c | 🔄 | 已接线为**模板匹配**：`TemplateMatcher`(assets/templates + 区域 NCC，阈值 0.75) + `SceneState` 模板兜底钩子 `TEMPLATE_RULES`，配套 `tools/make_template.py`；OCR pipeline 兜底仍未接；离线自检 0 误命中，待真机验证 |
 | T03 | 特征带方向搜索 | `rust_logic/src/color/mod.rs` | 1天 | 低 | 源 函数24a/26a | ✅ | 评估结论：方向参数已端到端接通(Kotlin `ColorSchema.direction`→`findMultiColors`→Rust `findMultiColorsRaw`→`find_multi_colors_internal`)，但原 Rust 仅实现 0/1 且 `dir=1` 误作「右下→左上」。已修正 `find_multi_colors_internal`：`0=左上→右下 / 1=左下→右上 / 2=右上→左下 / 3=右下→左上 / 4=中心向四周 / 5=四周向中心`，对齐源 `函数24a`(默认 dir=1=BL→TR)。`cargo check` 通过。**待办接线**：当前 `MyColors` 所有 `ColorSchema.parse` 第7参 `dir` 写死 0，需在颜色生成器透传源方向值(避免无设备时全量翻方向，建议随 T30 真机标定逐色接入)；运行时须 `cargo build --release` 重新产出 .so 方生效 |
 | T19 | 特征标定工具链（自动生成 + 模板裁剪） | `tools/make_feature.py` / `tools/make_template.py` | 1天 | 中 | 实机痛点：文字按钮需逐点量色 | 🔄 | `make_feature.py`：给截图+矩形自动生成 `ColorSchema`(主色众数 + 跨样本稳定偏移点) + 正/负样本自检；`make_template.py`：裁剪模板到 `assets/templates` 并做同口径 NCC 自检（可限区域/阈值）。已离线验证（编辑模式：15 张负样本 0 误命中），待实机使用验证 |
@@ -94,6 +94,10 @@
 | T35 | 文字按钮定位 `ChineseTextReader.locate()`（按文案定位 + 坐标反算） | `jar/code/universal/recognizer/ChineseTextReader.kt` | 0.5天 | 中 | T11 收尾/补充 | ✅ | ML Kit 文字识别结果带包围盒，新增 `locate(keyword,...)`：识别→命中含关键字行→包围盒 `/scale`+裁剪偏移反算回屏幕坐标返回 `Rect`；复用 `minConfidence`/`requireCJK` 双闸；调用方自行降级（回退颜色匹配/跳过）。`buildJar` 通过、0 lint |
 | T36 | 训练部队/法术（主世界） | `jar/code/mainbase/troop/TrainTroops.kt` | 1.5天 | 中 | 源 造兵(241a/239a/240a) Q段 L34253-41171 | ✅ | 用户 2026-09-28 追加（原编号表无此 ID）。新建 `TrainTroops.trainTroops(account)`：读 `TRAIN_ENABLED` 开关→进军队/造兵栏(文字 locate)→按账号记忆键 `Train_<兵种/法术>` 数量逐个文字定位+连点「训练」。源「左中右栏切换+单位占用扣减+活动兵/超级兵强化」待 T30 复标。`buildJar` 通过、0 lint、挂 MainScript |
 | T37 | 升级建筑（主世界） | `jar/code/mainbase/upgrade/Upgrade.kt` | 2天 | 中 | 源 升级(202a/205a/206a) P段 L24387-34252 | ✅ | 用户 2026-09-28 追加（原编号表无此 ID）。新建 `Upgrade.upgradeBuildings(account)`：读 `UPGRADE_ENABLED` 开关→开商店/建筑列表(文字 locate)→按账号记忆键 `Upgrade_<建筑>` 逐个定位+点「升级」+「确定」。源「建筑列表 OCR 扫描+空闲工人判断+宝石秒」待 T30 复标（OCR 字库 jianzhu0.txt）。`buildJar` 通过、0 lint、挂 MainScript |
+| T38 | 放置新建筑（主世界） | `jar/code/mainbase/buildings/PlaceNewBuilding.kt` | 1天 | 低 | 源 函数213a L31359 / 函数215a L31502 | ✅ | 用户 2026-09-28 追加（源自审计缺口 B）。新建 `PlaceNewBuilding.placeNewBuilding(account)`：读 `PLACE_BUILDING_ENABLED`+本账号 `PlaceBuildingTarget`(建筑名)→文字 locate 开商店→定位目标建筑→点地图落点(基准 640,640)→点「确定/建造」。**宝石秒升级不做**（用户明确）。源落点/对号坐标待 T30 复标。`buildJar` 通过、0 lint、挂 MainScript |
+| T39 | 都城币捐 | `jar/code/mainbase/clan/CapitalCoinDonate.kt` | 0.5天 | 低 | 源 函数268a L37267 | ✅ | 用户 2026-09-28 追加（源自审计缺口 C）。新建 `donateCapitalCoins(account)`：读 `CAPITAL_COIN_DONATE_ENABLED`→进部落(locate)→进都城(locate)→循环点「捐/贡献」+「确定/捐赠」(最多 7 次)，量由 `CapitalCoinDonateAmount` 控制。源「都城地图小船」「放大」坐标待 T30 复标。`buildJar` 通过、0 lint、挂 MainScript |
+| T40 | 审批入群 | `jar/code/mainbase/clan/ClanApprove.kt` | 0.5天 | 低 | 源 函数287a L38656 | ✅ | 用户 2026-09-28 追加（源自审计缺口 C）。新建 `approveClanRequests(account)`：读 `CLAN_APPROVE_ENABLED`→进部落→进审批/成员/申请页→循环 locate「同意」点击(最多 20 次)。源「同意」绿配色(32AD64)/暗号校验未移植(简化全同意)。`buildJar` 通过、0 lint、挂 MainScript |
+| T41 | 每日福利领取 | `jar/code/mainbase/daily/DailyRewards.kt` | 1天 | 低 | 源 ⑬ L42550/39012/40936/6795/6821/46147 | ✅ | 用户 2026-09-28 追加（源自审计缺口 A）。新建 `claimDailyRewards(account)`：读 `DAILY_REWARDS_ENABLED`→按子项开关 `Daily_{Token,RedPacket,Event,Chest,SignIn,SellPotion}` 逐个文字 locate+点击：领令牌/红包/活动奖励/开箱/签到/卖药水。源各 2023 像素坐标作注释兜底，待 T30 复标。`buildJar` 通过、0 lint、挂 MainScript |
 
 ### P3 — 可选/低优
 
@@ -135,16 +139,18 @@
 |---|---|---|---|
 | 村庄改名 | ❌ 不抄 | 用户 2026-09-23 明确决定 | 2026-09-23 |
 | 部落靓标签筛选 | ❌ 不抄 | 用户 2026-09-23 明确决定 | 2026-09-23 |
+| T01 坐标归一化集成 pass | ⏭ 跳过 | 用户 2026-09-28：固定 1280×720 环境收益≈0，`CoordNormalizer` 机制已写好留作备用 | 2026-09-28 |
 
 ---
 
 ## 四、进度汇总
 
-- 总任务数：37（T01–T37，T36/T37 为 2026-09-28 用户追加的训练/升级，原编号表无此 ID）
-- ✅ 已完成：21（T03,T04,T05,T08,T09,T10,T12,T13,T22,T24,T25,T26,T27,T28,T29,T31,T32,T33,T35,T36,T37）
+- 总任务数：41（T01–T41，T36–T41 为 2026-09-28 用户追加，原编号表无此 ID）
+- ✅ 已完成：25（T03,T04,T05,T08,T09,T10,T12,T13,T22,T24,T25,T26,T27,T28,T29,T31,T32,T33,T35,T36,T37,T38,T39,T40,T41）
 - 🔄 进行中：12（T02,T07,T11,T14,T15,T16,T17,T18,T19,T20,T21,T23）
 - 🔄 精炼完成待真机验证：1（T06，部署顺序/9地图补点已修正，下兵颜色待 emulator-5556 复标）
-- ⬜ 待办：3（T01,T30,T34）
+- ⬜ 待办：2（T30,T34）
+- ⏭ 跳过：1（T01，见决策记录）
 - ❌ 不抄/取消：2（村庄改名、部落靓标签，见决策记录）
 
 ---

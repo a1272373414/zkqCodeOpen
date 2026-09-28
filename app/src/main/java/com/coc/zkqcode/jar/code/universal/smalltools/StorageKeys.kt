@@ -54,6 +54,29 @@ object StorageKeys {
     // 升级主开关（T13）：按账号，1=开启
     const val UPGRADE_ENABLED = "UpgradeEnabled"
 
+    // 每日福利主开关（T41）：按账号，1=开启
+    const val DAILY_REWARDS_ENABLED = "DailyRewardsEnabled"
+    // 每日福利各子项开关（按账号，1=开启）：令牌 / 红包 / 活动奖励 / 开箱 / 签到 / 卖药水
+    const val DAILY_TOKEN = "DailyToken"
+    const val DAILY_RED_PACKET = "DailyRedPacket"
+    const val DAILY_EVENT = "DailyEvent"
+    const val DAILY_CHEST = "DailyChest"
+    const val DAILY_SIGN_IN = "DailySignIn"
+    const val DAILY_SELL_POTION = "DailySellPotion"
+
+    // 都城币捐主开关（T39）：按账号，1=开启
+    const val CAPITAL_COIN_DONATE_ENABLED = "CapitalCoinDonateEnabled"
+    // 都城币捐目标数量（按账号，空/0=默认捐满）
+    const val CAPITAL_COIN_DONATE_AMOUNT = "CapitalCoinDonateAmount"
+
+    // 审批入群主开关（T40）：按账号，1=开启
+    const val CLAN_APPROVE_ENABLED = "ClanApproveEnabled"
+
+    // 放置新建筑主开关（T38）：按账号，1=开启
+    const val PLACE_BUILDING_ENABLED = "PlaceBuildingEnabled"
+    // 放置新建筑目标（按账号，建筑名关键字，如「箭塔」「兵营」「墙」；空=不放置）
+    const val PLACE_BUILDING_TARGET = "PlaceBuildingTarget"
+
     /**
      * Generate a storage key with account number suffix.
      * Used for per-account data that needs to be tracked separately.
