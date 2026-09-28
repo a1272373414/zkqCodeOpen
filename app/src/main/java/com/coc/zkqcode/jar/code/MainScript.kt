@@ -17,6 +17,7 @@ import com.coc.zkqcode.jar.code.clancapital.attack.pickCapitalTarget
 import com.coc.zkqcode.jar.code.colorschema.MyColors
 import com.coc.zkqcode.jar.code.universal.colors.findMultiColorsUntil
 import com.coc.zkqcode.jar.code.mainbase.playMainBase
+import com.coc.zkqcode.jar.code.mainbase.clangames.playClanGames
 import com.coc.zkqcode.jar.code.universal.CameraState
 import com.coc.zkqcode.jar.code.universal.GameRunControl
 import com.coc.zkqcode.jar.code.universal.GameVersion
@@ -119,6 +120,9 @@ suspend fun runMainScript() {
                 ShowMessage("主世界对战完成，准备切换账号")
                 return@stepBlock
             }
+            // 竞赛阶段（T07）：接夜世界竞赛任务 + 领竞赛奖励，由 do_clan_games / claim_clan_game_rewards 控制。
+            // 竞赛是附加功能：内部任何一步拿不准都自行跳过，不参与 stepBlock 的中断判定。
+            playClanGames()
             // 都城阶段（M4-③）：领都城币 / 捐都城币 / 发起突袭 / 打突袭，由各自的配置开关控制。
             // 约定与 playBuilderBase 一致：返回 false = 本阶段结束（无配置或无目标时也会立刻返回）。
             if (!playClanCapital()) {

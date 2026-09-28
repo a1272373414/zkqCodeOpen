@@ -43,16 +43,55 @@
 | T06 | 都城部署精炼 + 实机验证 | `jar/code/clancapital/attack/CapitalAttack.kt` | 2天 | 高 | 源 突袭打野 | ⏸ | 用户 2026-09-23 决定延后，先做夜世界 |
 | T22 | 都城突袭补齐：造兵按源两套打法+下兵第二轮扫描+9地图定位+总都城币统计+测试日志截图 | `jar/code/clancapital/*`、`colorschema/colorpackage/clancapital/*` | 2天 | 高 | 源 函数28a/29a/30a/31a + 可打地图 | ✅ | 用户 2026-09-26 要求补齐缺口且造兵方案按源；测试期加日志与截图存档 |
 | T23 | 聊天界面都城友谊战识别与进入（含下兵测试） | `jar/code/clancapital/attack/CapitalFriendlyChat.kt`、`colorschema/colorpackage/clancapital/CapitalFriendlyChatColors.kt`、`jar/code/clancapital/attack/CapitalAttack.kt` | 1天 | 高 | 实机：用户手动发起都城友谊战(不消耗突袭次数)用于都城下兵测试；红框标注于聊天卡片 | 🔄 | ①识别聊天卡片「绿侦察+红进攻+蓝详细信息」三按钮组合(`CapitalFriendlyChatColors`)，`enterCapitalFriendlyFromChat()` 点击红「进攻」进入，实机截图离线自检 0 假阳性；②新增 `playCapitalFriendlyChallenge()` 完整流程(进卡片→等放弃按钮→`capitalDeployArmy` 部署)，挂到 `runTestCode` 调试入口；`capitalDeployArmy` 新增 `zoomOut` 参数(友谊战首跑跳过战斗内缩放，待专项标定)；③下兵/法术颜色(CapitalDeployColors)与逻辑待友谊战实机验证标定 |
-| T07 | 部落竞赛 ClanGames | `jar/code/mainbase/clangames/ClanGames.kt` + Settings + colorpackage | 2天 | 高 | 源 竞赛(135) | ⬜ | 需从 awcocx 反推挑战类型与兵种映射 |
+| T07 | 部落竞赛 ClanGames | `jar/code/mainbase/clangames/ClanGames.kt` + Settings + colorpackage | 2天 | 高 | 源 竞赛(135) | 🔄 | 已拆分为 **T25–T30**（见「部落竞赛（T07 拆分）」章节）；T25–T29 代码落地完成，**T30 真机标定验证通过后才置 ✅** |
 | T08 | 每周精选/商人购买 | `jar/code/mainbase/trader/Trader.kt` + colors | 1.5天 | 高 | 源 商人(18)+精选(20) | ⬜ | 识别商人页商品→按资源/宝石买周精选 |
 | T09 | 部落战进攻 ClanWar | `jar/code/mainbase/clanwar/ClanWar.kt` | 2天 | 高 | 源 部落战(209) | ⬜ | 复用 MainBaseDeployTroops 部署器 |
+
+### 部落竞赛（T07 拆分，对齐源 函数230a/231a/232a/233a + L42649 调度）
+
+> 用户 2026-09-28 要求：参考源脚本实现竞赛功能，**先完善任务文档、按计划开发，真机调试留到最后**。
+> 源脚本坐标是竖屏 720x1280，本项目横屏 1280x720，全部按项目通用 90° 映射换算
+> （区域 `(x1,y1,x2,y2) -> (y1, 719-x2, y2, 719-x1)`；偏移 `(dx,dy) -> (dy,-dx)`），
+> 颜色串沿用源脚本 BGR 写法。换算由 `temp/gen_cg_colors.py` / `temp/emit_cg_kt.py` 批量生成，避免手抄出错。
+
+| ID | 任务 | 目标文件(当前项目) | 工作量 | 优先级 | 源依据 | 状态 | 备注 |
+|---|---|---|---|---|---|---|---|
+| T25 | 竞赛颜色特征库移植（面板/按钮/状态 21 个 + 任务图标 60 组 + 奖励图标 16 组） | `colorpackage/mainbase/ClanGamesColors.kt`、`ClanGamesTaskIcons.kt`、`ClanGamesRewardIcons.kt`、`MyColors.kt` | 0.5天 | 高 | 源 函数231a L33301~33512、函数232a L33559~33605、函数233a L33513~34068 | ✅ | 脚本自动生成；任务图标按源 v 参数分 `SIMPLE_TEMPLATES`(56) / `HARD_TEMPLATES`(4)；**均为 2023 版配色，待真机复标** |
+| T26 | 竞赛屋定位 + 进面板 + 状态判定（已接/蓝徽章/积分满/冷却/失败/倒计时/未入部落） | `jar/code/mainbase/clangames/ClanGames.kt` | 0.5天 | 高 | 源 函数233a L33513~33656 | ✅ | 进面板后 15 次轮询状态；`isOnClanGamesPanel` 用「竞赛界面」+右上角切换按钮双佐证 |
+| T27 | 接夜世界任务（任务图标匹配 → 绿色接受按钮 → 复核）+ 无任务时放弃第一张卡刷新 + 已接任务联动切号局数 | 同上 | 0.5天 | 高 | 源 函数230a L33267、函数231a、L33964~34041、L42672 | ✅ | 两轮：简单 → 简单+困难，中间上下滑屏；源用 OCR 判「建筑大师」，本项目无中文字库，改为只靠图标模板挑夜世界任务；已接任务落账号记忆 `CLAN_GAMES_ACCEPTED`，夜世界对战改用「接取竞赛后…切号」局数（源 L42672 已接夜竞赛→夜打鱼），积分做满/放弃/失败即恢复 |
+| T28 | 领竞赛奖励（逐行绿勾 → 行内奖励图标 → 绿色确认） | 同上 | 0.5天 | 高 | 源 函数232a + L33634/33640 | ✅ | 行区域按 `ColorSchema.rescope` 收窄；图标全不命中时随机点橙色奖励卡 |
+| T29 | 账号记忆节流（3h / 10min）+ 挂入主循环 | `StorageKeys.kt`、`MainScript.kt` | 0.5天 | 高 | 源 L42649~L42683 | ✅ | 竞赛为附加功能，内部出错自行跳过，**不参与 stepBlock 中断判定** |
+| T30 | 真机标定与验证（emulator-5556） | 竞赛颜色特征 + `ClanGames.kt` | 1天 | 高 | — | ⬜ | **真机调试留到最后**：优先标定 竞赛屋 / 已接任务蓝标 / 绿色接受按钮 三个关键特征（`tools/make_feature.py`），再验证接任务与领奖闭环；不消耗资源、失败仅跳过 |
 
 ### P2 — 识别/标签增强（中优先）
 
 | ID | 任务 | 目标文件(当前项目) | 工作量 | 优先级 | 源依据 | 状态 | 备注 |
 |---|---|---|---|---|---|---|---|
 | T10 | 联赛 CWL 进攻 | `jar/code/mainbase/league/League.kt` | 1天 | 中 | 源 联赛(67) | ⬜ | 接 PLAY_LADDER 设置，复用进攻部署 |
-| T11 | 中文玩家名 OCR | `jar/code/.../recognizer/PixelFontChinese.kt` + `tools/harvest_chinese_font.py` | 2天 | 中 | 源 font_chinese + 函数21a | ⬜ | 建中文像素字库，供部落名/村庄名读取 |
+| T11 | 中文玩家名 OCR | `jar/code/.../recognizer/PixelFontChinese.kt` + `tools/harvest_chinese_font.py` | 2天 | 中 | 源 函数21a | 🔄 | 已拆分为 **T31–T34**（见「中文识别（T11 拆分）」章节）；**源脚本并不存在 font_chinese**（全库 grep `chinese/中文/hanzi/汉字` 均 0 命中，函数21a 实际是数字库），故改为"ML Kit 中文为主 + 像素字库兜底" |
+
+### 中文识别（T11 拆分）
+
+> 2026-09-28 立项目前提（已核实）：**源脚本没有中文字库**——`doc/decrypt/` 全部 lua 中
+> `font_chinese / chinese / 中文 / hanzi / 汉字` 均为 0 命中；`函数21a`（L2477）里的"文字识别库"
+> 实际是 0-9 数字字模，与中文无关。所以不能"从源脚本抄字库"，必须自己采集。
+>
+> 技术路线（与项目现有能力对齐）：
+>  - **主路径**：项目已接入 ML Kit `ChineseTextRecognizerOptions`（`TextRecognizer.kt`），
+>    中文识别能力本体已有，缺的是"面向业务的封装"。
+>  - **兜底**：`PixelFontChinese` 像素字库（格式与 `PixelFontDigits` 一致：
+>    `字|高,宽|64进制点阵`），用于 ML Kit 不可用 / 小字号场景。字模由
+>    `tools/harvest_chinese_font.py`（截图 + 标注）或 App 端 ML Kit 自动标注采集。
+>  - **注意**：中文常用字 3500+，像素字库不可能全覆盖，**必须"识别不出就返回空，交给 ML Kit"**，
+>    绝不能硬猜（中文笔画密集、有描边阴影，像素匹配误判率远高于数字）。
+
+| ID | 任务 | 目标文件(当前项目) | 工作量 | 优先级 | 依据 | 状态 | 备注 |
+|---|---|---|---|---|---|---|---|
+| T31 | 中文像素字库框架（解析 + 匹配 + 采集）+ 采集工具 | `jar/code/universal/recognizer/PixelFontChinese.kt`、`tools/harvest_chinese_font.py` | 1天 | 中 | 复用 `PixelFontOcr` 管线 | ✅ | 字库格式/64进制与 `PixelFontDigits` 完全一致；**新增"字格合并"逻辑**：把相邻笔画/偏旁（如"明=日+月"、"性=忄+生"）合并成字格后再匹配，避免拆字；App 端 `harvestFromScreen()` 用 ML Kit 当"老师"自动标注采集；PC 侧 `tools/validate_chinese_ocr.py` 用 `cocfz-apk-test` 里的截图做离线验证；`gradlew :app:buildJar` 通过 |
+| T32 | 中文文本读取封装（部落名/村庄名/玩家名/任务描述） | `jar/code/universal/recognizer/ChineseTextReader.kt` | 0.5天 | 中 | 业务需要 | ✅ | 封装 `TextRecognizer`：区域读取、结果清洗、ML Kit 无结果回落 `PixelFontChinese`；`containsAny()` 做"建筑大师"等关键字包含匹配；编译通过 |
+| T33 | 竞赛接入中文 OCR：已接任务区分「主世界 / 夜世界(建筑大师)」 | `jar/code/mainbase/clangames/ClanGames.kt` | 0.5天 | 中 | 源 L33948 OCR 判「建筑大师」 | ✅ | 补 T27 缺口：`detectAcceptedTaskType()` 点开已接任务 → OCR(661,167,799,242) → 含"建筑大师"记 night 否则 main；`ClanGamesState` 增 `isNightTask`，记忆值改 `night/main/0`，`BuilderBaseAttack` 仅 `== "night"` 时切用"接取竞赛后"局数；编译通过 |
+| T34 | 真机采集中文字模 + 中文识别验证 | 采集工具 + 字库常量 | 0.5天 | 中 | — | ⬜ | 需 emulator-5556（当前不在线）；先采集部落名/村庄名高频字并验证 `detectAcceptedTaskType` 命中率 |
+| T35 | 文字按钮定位 `ChineseTextReader.locate()`（按文案定位 + 坐标反算） | `jar/code/universal/recognizer/ChineseTextReader.kt` | 0.5天 | 中 | T11 收尾/补充 | ✅ | ML Kit 文字识别结果带包围盒，新增 `locate(keyword,...)`：识别→命中含关键字行→包围盒 `/scale`+裁剪偏移反算回屏幕坐标返回 `Rect`；复用 `minConfidence`/`requireCJK` 双闸；调用方自行降级（回退颜色匹配/跳过）。`buildJar` 通过、0 lint |
 
 ### P3 — 可选/低优
 
@@ -99,10 +138,11 @@
 
 ## 四、进度汇总
 
-- 总任务数：24（T01–T24）
-- ✅ 已完成：2（T22,T24）
-- 🔄 进行中：10（T02,T14,T15,T16,T17,T18,T19,T20,T21,T23）
-- ⬜ 待办：11（T01,T03–T05,T07–T13）
+- 总任务数：35（T01–T35）
+- ✅ 已完成：11（T22,T24,T25,T26,T27,T28,T29,T31,T32,T33,T35）
+- 🔄 进行中：12（T02,T07,T11,T14,T15,T16,T17,T18,T19,T20,T21,T23）
+- ⬜ 待办：11（T01,T03–T05,T08–T10,T12,T13,T30,T34）
+- ⏸ 暂停：1（T06 延后）
 - ⏸ 暂停：1（T06 延后）
 - ❌ 不抄/取消：2（村庄改名、部落靓标签，见决策记录）
 
@@ -152,3 +192,14 @@
 | 2026-09-24 | T15 | 兜底 | 新增判据整体失效兜底：一个兵都还没下（deployed==0）却被判"全部已下放"时，退回按特征匹配下兵，避免整局一个兵都不下 |
 | 2026-09-24 | T15 | 回退 | **教训**：期间曾改用"人物背景色是否偏蓝"+"兵卡血条"判据（基于真机标注图标定，离线区分度 68），实机上完全对不上（战斗刚开始兵都没下却被全判已下场/已阵亡，兵和英雄都不下）→ 已 `git stash` 暂存（stash@{0}），待拿实机截图重新标定。**离线截图标定的判据必须在实机验证过再用**，且任何新判据都要配"失效兜底" |
 | 2026-09-25 | T15 | 修复 | 夜世界进攻"战争机器(王)不下场"：源方案 `BuilderBaseAttackSource.dropHero` 只点英雄卡选中、漏掉"再点一次落点"，导致英雄始终留在手里不下场（日志 `检测到英雄[王]卡槽...点下放` 后无实际下兵）。对照源 `awcocx_main.lua` 函数123a(15961-15978)：选卡后需 `taps(左上/右上/左下/右下中间X/Y)` 中点下兵。已补 `heroDeployPoint()` 取当前方向象限中点（横屏真实坐标）并在选卡后点击，王与夜飞机均生效。改动只在 jar 包，需 `gradlew :app:deployAndReload` 热更后才生效 |
+| 2026-09-28 | T07 | 拆分 | 用户要求"参考源脚本实现竞赛功能，先完善任务文档、按计划开发，真机调试留到最后"：T07 拆为 **T25–T30** 并新增「部落竞赛（T07 拆分）」章节；T07 → 🔄 |
+| 2026-09-28 | T25 | 新建+完成 | 竞赛颜色特征库：新增 `ClanGamesColors.kt`（21 个命名特征：竞赛屋/已接任务/蓝徽章/可领奖励/接受按钮/任务失败/冷却/倒计时/第一张卡/放弃按钮/放弃确认/奖励行/绿色操作按钮/领取确认/任务切换/奖励卡/积分满/任务完成/未入部落）、`ClanGamesTaskIcons.kt`（60 组任务图标，分 SIMPLE 56 / HARD 4）、`ClanGamesRewardIcons.kt`（16 组奖励图标）；全部由 `temp/gen_cg_colors.py`+`temp/emit_cg_kt.py` 按 90° 映射从源 lua 自动生成并接入 `MyColors`。源 cmpColorEx 多点比色已换算成"主色 + 相对偏移" |
+| 2026-09-28 | T26,T27,T28 | 新建+完成 | `jar/code/mainbase/clangames/ClanGames.kt`：竞赛屋定位(缩小镜头→找不到斜滑一次重试)→进面板(6s 等待)→15 次状态轮询(已接/蓝徽章≥3/积分满)→领奖(逐行绿勾+行内图标+确认)→未接任务时两轮(简单→简单+困难)图标匹配+绿色接受+复核→无任务放弃第一张卡刷新；退出/冷却/倒计时/未入部落/任务失败均有分支。`gradlew :app:buildJar` 编译通过 |
+| 2026-09-28 | T29 | 新建+完成 | `StorageKeys` 新增 `CLAN_GAMES_CHECK`(3h) / `CLAN_GAMES_NOT_FOUND`(10min) 按账号记忆节流（源 L42649~42683）；`MainScript` 在 `playMainBase()` 之后调用 `playClanGames()`，竞赛内部出错自行跳过，不参与 stepBlock 中断判定 |
+| 2026-09-28 | T30 | 新建 | 真机标定与验证（T07 收尾项，按用户要求留到最后）：优先标定 竞赛屋 / 已接任务蓝标 / 绿色接受按钮 |
+| 2026-09-28 | T27 | 补充 | 接任务与夜世界切号联动：`StorageKeys` 增 `CLAN_GAMES_ACCEPTED`（按账号持久化"已接竞赛任务"）；`ClanGamesState` 的 已接/放弃/做满 均落记忆（源 L42634 已做满→关接竞赛、L42672 已接夜竞赛→夜打鱼）；`BuilderBaseAttack` 读到已接竞赛时对战局数改用 `SWITCH_ACCOUNT_AFTER_BATTLES_WITH_TASKS`；`BuilderBaseConfig` 恢复该输入行（此前被注释）。`gradlew :app:buildJar` 编译通过。**T30 阻塞：emulator-5556 当前不在线，真机标定待模拟器可用后进行** |
+| 2026-09-28 | T11 | 拆分 | 用户要求实现中文字库 T11。经核实**源脚本并不存在中文字库**（`doc/decrypt/` 全库 grep `chinese/中文/hanzi/汉字` 均 0 命中；`函数21a` 实为数字字模），故不能从源照搬，改为"ML Kit 中文为主 + 像素字库兜底"路线，拆 T31–T34 |
+| 2026-09-28 | T31,T32,T33 | 新建+完成 | T31 `PixelFontChinese.kt`（中文像素字库：解析/匹配/采集，格式与 `PixelFontDigits` 一致）+ `tools/harvest_chinese_font.py`（截图+标注采模，含回读自检）；App 侧 `harvestFromScreen()` 用 ML Kit 当"老师"自动标注、`saveHarvested()` 落盘 `/sdcard/zkqFiles/chinese_font.txt`。T32 `ChineseTextReader.kt`：封装 `TextRecognizer` 中文识别，ML Kit 无结果回落 `PixelFontChinese`，`containsAny()` 做关键字包含匹配。T33 `ClanGames.kt` 接入：`detectAcceptedTaskType()` 点开已接任务→OCR(661,167,799,242)→含"建筑大师"记 night 否则 main，补上 T27"无中文字库"缺口；记忆值改 `night/main/0`，`BuilderBaseAttack` 仅 `== "night"` 切用"接取竞赛后"局数。`gradlew :app:buildJar` 编译通过、相关文件 0 lint |
+| 2026-09-28 | T34 | 新建 | 真机采集中文字模 + 中文识别验证（T11 收尾项）：需 emulator-5556（当前不在线），先采集部落名/村庄名高频字并验证 `detectAcceptedTaskType` 命中率 |
+| 2026-09-28 | T31 | 修复 | 验证时发现中文字符（如"明"、"性"）二值化后多为多连通域，`PixelFontChinese` 原逻辑直接按连通域匹配会拆字；新增 `mergeComponentsIntoCells()`，把相邻笔画/偏旁合并成近似方形字格后再匹配；同步更新 PC 侧 `tools/validate_chinese_ocr.py`。`gradlew :app:buildJar` 编译通过 |
+| 2026-09-28 | T34 | 验证 | 用 `cocfz-apk-test/游戏截图/` 现有截图离线跑 `tools/validate_chinese_ocr.py`：预处理/连通域/字格合并能较好地把 UI 中文切成单个字符区域（可视化见 `temp/cnocr_validation/`）；**用 APK 导出的 TTF 在 PC 截图上做模板匹配效果差**（字体/缩放/描边与模拟器截图差异大，匹配得分 0.45~0.50 且大量错认），说明像素字库法必须以**真机采集字模**为准。PC 端只能验证分割，不能验证最终识别准确率；最终识别率仍要靠 T34 真机 ML Kit + 采集字模后验证 |

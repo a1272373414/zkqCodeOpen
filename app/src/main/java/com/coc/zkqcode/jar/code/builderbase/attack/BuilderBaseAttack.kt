@@ -28,6 +28,7 @@ import com.coc.zkqcode.jar.code.universal.smalltools.getConfigRuntime
 import com.coc.zkqcode.jar.code.universal.smalltools.writeMemory
 import com.coc.zkqcode.core.util.fileactions.LogHelper.logAndRestart
 import com.coc.zkqcode.jar.code.universal.smalltools.enterBuilderBase
+import com.coc.zkqcode.jar.code.universal.smalltools.readMemory
 import com.coc.zkqcode.jar.ui.schema.Schema
 import kotlin.random.Random
 
@@ -495,8 +496,21 @@ suspend fun builderBaseAttack(): Boolean {
             resourcePercentage.gold < 96 -> "gold"
             else -> "exile"
         }
+        // 对战局数：账号已接竞赛任务时（源 L42672「已接夜竞赛 → 夜打鱼」），改用
+        // "接取竞赛后，对战以下局数后切号"，让夜世界多打几局刷竞赛任务进度。
+        val withTaskAccepted = readMemory(
+            StorageKeys.withAccountNumber(
+                StorageKeys.CLAN_GAMES_ACCEPTED, InGamesVars.currentAccountNumber
+            )
+        ) == "night"
+        val battleTimesSetting = if (withTaskAccepted) {
+            accountLog("已接竞赛任务，使用「接取竞赛后」的对战局数")
+            Schema.BUILDER_BASE_SETTINGS.SWITCH_ACCOUNT_AFTER_BATTLES_WITH_TASKS
+        } else {
+            Schema.BUILDER_BASE_SETTINGS.SWITCH_ACCOUNT_AFTER_BATTLES
+        }
         val battleTimes =
-            getConfigRuntime(Schema.BUILDER_BASE_SETTINGS.SWITCH_ACCOUNT_AFTER_BATTLES.key).toIntOrNull() ?: logAndRestart("${Schema.BUILDER_BASE_SETTINGS.SWITCH_ACCOUNT_AFTER_BATTLES.displayName} 必须是数字，请检查配置")
+            getConfigRuntime(battleTimesSetting.key).toIntOrNull() ?: logAndRestart("${battleTimesSetting.displayName} 必须是数字，请检查配置")
         repeat(battleTimes) { index ->
             if (!realAttack(attackType, index + 1, battleTimes)) return false
             if ((index + 1) % 5 == 0) {

@@ -66,7 +66,8 @@ fun LazyListScope.BuilderBaseConfig(
                 SettingSwitchIcon(key = "${BUILDER_BASE_SETTINGS.STOP_WHEN_RESOURCE_FULL.key}_c${index}")
             }
             SettingInputRow(key = "${BUILDER_BASE_SETTINGS.SWITCH_ACCOUNT_AFTER_BATTLES.key}_c${index}")
-            /* SettingInputRow(key = "${BUILDER_BASE_SETTINGS.SWITCH_ACCOUNT_AFTER_BATTLES_WITH_TASKS.key}_c${index}") */
+            // 接取竞赛任务后，改用这个局数（配合主世界「做竞赛任务」开关；SettingInputRow 无 explain 参数）
+            SettingInputRow(key = "${BUILDER_BASE_SETTINGS.SWITCH_ACCOUNT_AFTER_BATTLES_WITH_TASKS.key}_c${index}")
         }
     }
 

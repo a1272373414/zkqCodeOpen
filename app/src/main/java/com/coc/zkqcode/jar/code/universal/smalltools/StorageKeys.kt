@@ -20,6 +20,16 @@ object StorageKeys {
     const val PLACE_HERO_BANNERS = "PlaceHeroBanners"
     const val UPGRADE_GEARS_AND_PETS = "UpgradeGearsAndPets"
 
+    // Per-account keys for clan games (部落竞赛)
+    /** 上次「检查竞赛」的时间戳（节流用，对齐源脚本 3 小时一次）。 */
+    const val CLAN_GAMES_CHECK = "ClanGamesCheck"
+
+    /** 上次「没找到竞赛屋」的时间戳（节流用，对齐源脚本 10 分钟后再找）。 */
+    const val CLAN_GAMES_NOT_FOUND = "ClanGamesNotFound"
+
+    /** 账号是否已接取竞赛任务（"1"=已接，对应源 `已接主竞赛/已接夜竞赛`）。 */
+    const val CLAN_GAMES_ACCEPTED = "ClanGamesAccepted"
+
     // Per-account keys for dynamic adjustment resource thresholds
     const val DYNAMIC_GOLD = "DynamicGold"
     const val DYNAMIC_ELIXIR = "DynamicElixir"

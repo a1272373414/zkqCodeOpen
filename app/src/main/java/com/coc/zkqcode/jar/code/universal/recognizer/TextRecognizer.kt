@@ -20,7 +20,9 @@ import kotlin.coroutines.cancellation.CancellationException
 
 data class RecognizedText(
     val text: String,
-    val position: Rect?
+    val position: Rect?,
+    // 该行识别置信度（0~1）。ML Kit 部分模型不回传，此时用 1f 表示「未知/采信」
+    val confidence: Float = 1f
 )
 
 object TextRecognizer {
@@ -152,7 +154,15 @@ object TextRecognizer {
                 val result = mutableListOf<RecognizedText>()
                 for (block in visionText.textBlocks) {
                     for (line in block.lines) {
-                        result.add(RecognizedText(line.text, line.boundingBox))
+                        // ML Kit 部分模型不回传置信度（返回 0），统一按 1f 处理，避免误过滤
+                        val c = line.confidence
+                        result.add(
+                            RecognizedText(
+                                line.text,
+                                line.boundingBox,
+                                if (c.isFinite() && c > 0f) c else 1f
+                            )
+                        )
                     }
                 }
                 result
