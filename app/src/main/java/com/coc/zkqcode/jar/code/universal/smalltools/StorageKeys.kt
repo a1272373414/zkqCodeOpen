@@ -46,6 +46,9 @@ object StorageKeys {
     // 部落战「留1刀」：开启时仅剩 1 次机会则跳过（源「留一次进攻机会」）
     const val CLAN_WAR_KEEP_ONE = "ClanWarKeepOne"
 
+    // 联赛(CWL)进攻主开关（T10）：按账号，1=开启
+    const val LEAGUE_WAR_ENABLED = "LeagueWarEnabled"
+
     /**
      * Generate a storage key with account number suffix.
      * Used for per-account data that needs to be tracked separately.

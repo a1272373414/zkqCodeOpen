@@ -35,6 +35,7 @@ import com.coc.zkqcode.jar.code.universal.smalltools.AgreementPopups
 import com.coc.zkqcode.jar.code.universal.smalltools.ChangeWarBase
 import com.coc.zkqcode.jar.code.universal.smalltools.Trader
 import com.coc.zkqcode.jar.code.mainbase.clan.ClanWar
+import com.coc.zkqcode.jar.code.mainbase.league.League
 import com.coc.zkqcode.jar.code.mainbase.clan.donateToClan
 import com.coc.zkqcode.core.util.fileactions.LogHelper.logAndRestart
 import com.coc.zkqcode.jar.code.mainbase.herohall.upgradeGearsAndPets
@@ -127,6 +128,9 @@ suspend fun runMainScript() {
 
             // 部落战进攻（T09）：CLAN_WAR_ENABLED 开启且有可用进攻机会时执行（下兵复用主世界）
             ClanWar.clanWarAttack(InGamesVars.currentAccountNumber)
+
+            // 联赛(CWL)进攻（T10）：LEAGUE_WAR_ENABLED 开启且有可用进攻机会时执行（下兵复用主世界）
+            League.leagueAttack(InGamesVars.currentAccountNumber)
 
             if (!playBuilderBase()) {
                 ShowMessage("夜世界对战完成，准备进入主世界")
