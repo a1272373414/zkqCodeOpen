@@ -61,7 +61,7 @@
 | T27 | 接夜世界任务（任务图标匹配 → 绿色接受按钮 → 复核）+ 无任务时放弃第一张卡刷新 + 已接任务联动切号局数 | 同上 | 0.5天 | 高 | 源 函数230a L33267、函数231a、L33964~34041、L42672 | ✅ | 两轮：简单 → 简单+困难，中间上下滑屏；源用 OCR 判「建筑大师」，本项目无中文字库，改为只靠图标模板挑夜世界任务；已接任务落账号记忆 `CLAN_GAMES_ACCEPTED`，夜世界对战改用「接取竞赛后…切号」局数（源 L42672 已接夜竞赛→夜打鱼），积分做满/放弃/失败即恢复 |
 | T28 | 领竞赛奖励（逐行绿勾 → 行内奖励图标 → 绿色确认） | 同上 | 0.5天 | 高 | 源 函数232a + L33634/33640 | ✅ | 行区域按 `ColorSchema.rescope` 收窄；图标全不命中时随机点橙色奖励卡 |
 | T29 | 账号记忆节流（3h / 10min）+ 挂入主循环 | `StorageKeys.kt`、`MainScript.kt` | 0.5天 | 高 | 源 L42649~L42683 | ✅ | 竞赛为附加功能，内部出错自行跳过，**不参与 stepBlock 中断判定** |
-| T30 | 真机标定与验证（emulator-5556） | 竞赛颜色特征 + `ClanGames.kt` | 1天 | 高 | — | ⬜ | **真机调试留到最后**：优先标定 竞赛屋 / 已接任务蓝标 / 绿色接受按钮 三个关键特征（`tools/make_feature.py`），再验证接任务与领奖闭环；不消耗资源、失败仅跳过 |
+| T30 | 真机标定与验证（emulator-5556） | 竞赛颜色特征 + `ClanGames.kt` | 1天 | 高 | — | 🔄 | **2026-09-28 emulator-5556 已在线**：框架已验证（build/install/root授权/无障碍服务绑定/截屏 root-screencap 均通，bot 真机成功识别「部落聊天框」并点击）。代码由 `DO_CLAN_GAMES` 配置开关驱动、全程 `findMultiColors` 多色匹配（真机复标项）；补做：开 `DO_CLAN_GAMES` 开关 + 账号需在有活跃竞赛的部落，再跑闭环验证接任务/领奖 |
 
 ### P2 — 识别/标签增强（中优先）
 
@@ -90,7 +90,7 @@
 | T31 | 中文像素字库框架（解析 + 匹配 + 采集）+ 采集工具 | `jar/code/universal/recognizer/PixelFontChinese.kt`、`tools/harvest_chinese_font.py` | 1天 | 中 | 复用 `PixelFontOcr` 管线 | ✅ | 字库格式/64进制与 `PixelFontDigits` 完全一致；**新增"字格合并"逻辑**：把相邻笔画/偏旁（如"明=日+月"、"性=忄+生"）合并成字格后再匹配，避免拆字；App 端 `harvestFromScreen()` 用 ML Kit 当"老师"自动标注采集；PC 侧 `tools/validate_chinese_ocr.py` 用 `cocfz-apk-test` 里的截图做离线验证；`gradlew :app:buildJar` 通过 |
 | T32 | 中文文本读取封装（部落名/村庄名/玩家名/任务描述） | `jar/code/universal/recognizer/ChineseTextReader.kt` | 0.5天 | 中 | 业务需要 | ✅ | 封装 `TextRecognizer`：区域读取、结果清洗、ML Kit 无结果回落 `PixelFontChinese`；`containsAny()` 做"建筑大师"等关键字包含匹配；编译通过 |
 | T33 | 竞赛接入中文 OCR：已接任务区分「主世界 / 夜世界(建筑大师)」 | `jar/code/mainbase/clangames/ClanGames.kt` | 0.5天 | 中 | 源 L33948 OCR 判「建筑大师」 | ✅ | 补 T27 缺口：`detectAcceptedTaskType()` 点开已接任务 → OCR(661,167,799,242) → 含"建筑大师"记 night 否则 main；`ClanGamesState` 增 `isNightTask`，记忆值改 `night/main/0`，`BuilderBaseAttack` 仅 `== "night"` 时切用"接取竞赛后"局数；编译通过 |
-| T34 | 真机采集中文字模 + 中文识别验证 | 采集工具 + 字库常量 | 0.5天 | 中 | — | ⬜ | 需 emulator-5556（当前不在线）；先采集部落名/村庄名高频字并验证 `detectAcceptedTaskType` 命中率 |
+| T34 | 真机采集中文字模 + 中文识别验证 | 采集工具 + 字库常量 | 0.5天 | 中 | — | 🔄 | **2026-09-28 emulator-5556 已在线**：ML Kit 中文识别（harvest 的"老师"）真机已验证（bot 实时识别「部落聊天框」等中文成功）；**但 `PixelFontChinese.harvestFromScreen()` 全代码库无调用方——采集字模的 UI 触发入口尚未接线**，故真机自动采集暂不可触发。需补一个触发入口（如主页调试按钮）后，再跑 `harvestFromScreen` 采集部落名/村庄名高频字并验证 `detectAcceptedTaskType` 命中率 |
 | T35 | 文字按钮定位 `ChineseTextReader.locate()`（按文案定位 + 坐标反算） | `jar/code/universal/recognizer/ChineseTextReader.kt` | 0.5天 | 中 | T11 收尾/补充 | ✅ | ML Kit 文字识别结果带包围盒，新增 `locate(keyword,...)`：识别→命中含关键字行→包围盒 `/scale`+裁剪偏移反算回屏幕坐标返回 `Rect`；复用 `minConfidence`/`requireCJK` 双闸；调用方自行降级（回退颜色匹配/跳过）。`buildJar` 通过、0 lint |
 | T36 | 训练部队/法术（主世界） | `jar/code/mainbase/troop/TrainTroops.kt` | 1.5天 | 中 | 源 造兵(241a/239a/240a) Q段 L34253-41171 | ✅ | 用户 2026-09-28 追加（原编号表无此 ID）。新建 `TrainTroops.trainTroops(account)`：读 `TRAIN_ENABLED` 开关→进军队/造兵栏(文字 locate)→按账号记忆键 `Train_<兵种/法术>` 数量逐个文字定位+连点「训练」。源「左中右栏切换+单位占用扣减+活动兵/超级兵强化」待 T30 复标。`buildJar` 通过、0 lint、挂 MainScript |
 | T37 | 升级建筑（主世界） | `jar/code/mainbase/upgrade/Upgrade.kt` | 2天 | 中 | 源 升级(202a/205a/206a) P段 L24387-34252 | ✅ | 用户 2026-09-28 追加（原编号表无此 ID）。新建 `Upgrade.upgradeBuildings(account)`：读 `UPGRADE_ENABLED` 开关→开商店/建筑列表(文字 locate)→按账号记忆键 `Upgrade_<建筑>` 逐个定位+点「升级」+「确定」。源「建筑列表 OCR 扫描+空闲工人判断+宝石秒」待 T30 复标（OCR 字库 jianzhu0.txt）。`buildJar` 通过、0 lint、挂 MainScript |
@@ -149,7 +149,7 @@
 - ✅ 已完成：25（T03,T04,T05,T08,T09,T10,T12,T13,T22,T24,T25,T26,T27,T28,T29,T31,T32,T33,T35,T36,T37,T38,T39,T40,T41）
 - 🔄 进行中：12（T02,T07,T11,T14,T15,T16,T17,T18,T19,T20,T21,T23）
 - 🔄 精炼完成待真机验证：1（T06，部署顺序/9地图补点已修正，下兵颜色待 emulator-5556 复标）
-- ⬜ 待办：2（T30,T34）
+- 🔄 真机验证进行中：2（T30,T34，emulator-5556 已在线 2026-09-28，框架已通、待补齐开关/触发入口）
 - ⏭ 跳过：1（T01，见决策记录）
 - ❌ 不抄/取消：2（村庄改名、部落靓标签，见决策记录）
 
