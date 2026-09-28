@@ -117,7 +117,7 @@
 | T15 | 夜世界多兵种识别与批量下兵 | `jar/code/builderbase/attack/BuilderBaseAttack.kt` + `builderbase` colors | 2天 | 中 | 源 函数123a(15997~16071) | 🔄 | 12 兵种颜色 + `deployAllTroops`；**实机发现单点落点会压到基地建筑区(不可下兵)**，已改为四象限多点候选 `buildDeployPoints()` + `buildFallbackDeployPoints()` 边缘环带兜底；下兵状态机：白框 `isCardSelected()` 判选中（避免重复点卡=放技能）、**顶部紫色技能条位置 `cardSkillBarTop()`/`isCardDeployable()` 判兵是否已下放**（未下 顶部 y≈588 / 已下场 568 / 技能已放或阵亡则无条，跨 10 张截图验证一致）、单轮上限 `MAX_TROOPS_PER_ROUND=30`/连点 `DEPLOY_TAPS_PER_ROUND=8`、非网格卡（x<180：英雄/夜飞机）逐兵种记录 `offGridTapped`；**已下完的卡按卡位号 `exhaustedSlots` 去重**（同兵种占 6 个卡位，按兵种序号会把其余同款卡一起跳过）并支持逐卡位 rescope 续找；判据整体失效时（一个兵都没下却被判全部已下放）回退按特征下兵，待验证 |
 | T16 | 夜世界英雄技能自动释放 | `jar/code/builderbase/attack/BuilderBaseAttack.kt` + `builderbase` colors | 1天 | 中 | 源 战斗监控(16606~16669) | 🔄 | 夜飞机按卡槽 rescope 检测粉光后点槽；战争机器改用**充能条第 1 格亮起**判据（新增 `HeroChargeReady`，位置 (95,560)-(112,565)、亮色 #C022FB，由用户实机截图经 `tools/make_feature.py` 标定），命中即点英雄卡槽释放；**颜色串是 BGR 且为上中下三层垂直叠色**，`HeroChargeReady` 修正为 (93,559)-(116,570) 三层 FB25C1/FE3AC7/FF98DF、`TroopSkills` 同理修正（此前按 RGB 解释被改坏）；技能轮询 `SKILL_LOOP_MAX_MS` 120s→**30s**（原值每次下兵后死守两分钟，把"进第二区域/继续下兵"全卡住；英雄充能约 15s/格，30s 够放 1~2 次），待验证 |
 | T17 | 场景识别健壮性（载入页/战斗中/编辑模式/未识别重试） | `jar/code/universal/SceneState.kt` + `colorpackage/UIColors.kt` | 1天 | 高 | 15 张实机未识别 debug 截图 | 🔄 | 新增 `GameScene.LOADING` 与特征 `GameLoadingNotice`(合规黑屏)/`BuilderBaseEditMode`(夜世界编辑模式)；战斗中(`EndBattle`等)归 `BATTLE`；未识别先等 1.5s×2 重试、载入等待 15–90s；载入页不再按返回（修复游戏退出确认弹窗），待验证 |
-| T18 | 日志分级与文件落盘 | `core/util/basic/ShowMessage.kt` + `core/util/fileactions/LogHelper.kt` | 1天 | 中 | — | 🔄 | `ShowMessage` 恢复旧 `invoke` 入口(保持旧 jar 二进制兼容)并新增 `run()/warn()/error()/log()`；`LogHelper` 按 DEBUG(全量 VERBOSE)/RELEASE(仅 INFO+) 分级落文件、缓冲 100→200→**2000**（夜世界下兵诊断每轮 3 行、一场约 200 行，200 行会滚掉上一场）；夜世界里程碑改 `ShowMessage.run()`，待验证 |
+| T18 | 日志分级与文件落盘 | `core/util/basic/ShowMessage.kt` + `core/util/fileactions/LogHelper.kt` | 1天 | 中 | — | ✅ | `ShowMessage` 恢复旧 `invoke` 入口(保持旧 jar 二进制兼容)并新增 `run()/warn()/error()/log()`；`LogHelper` 按 DEBUG(全量 VERBOSE)/RELEASE(仅 INFO+) 分级落文件。**2026-09-29 完成按时间切分改造**：①按**小时**切分 `info_yyyyMMdd_HH.log` / `error_yyyyMMdd_HH.log`（两天仅 48 个文件；10 分钟切分会到 288 个、5 分钟 576 个，过多且文件名不直观）；②单文件超 2MB 自动分片 `_part2/_part3`，防 VERBOSE 全量撑爆单文件；③**只保留最近 48 小时**：App 启动时 + 跨小时切文件时 + 每 30 分钟兜底各清一次，按**文件名时间戳**判断（旧版 `info.log` 解析不出时间则退化为按最后修改时间）；④顺带修性能：旧实现每条日志都 `readLines`+`writeText` 全文件重写做行数裁剪，改为保持打开的流顺序追加，不再每条重写；⑤异常堆栈 `Log.getStackTraceString(t)` 也会写入（原来被丢弃）。**真机验证**：生成 `info_20260929_01.log` 正常；造 3 天前文件被自动删除、48h 内文件保留。`assembleDebug` 通过、0 lint |
 
 ### 通用稳定性修复（实机问题驱动，不入阶段表）
 
@@ -148,8 +148,8 @@
 ## 四、进度汇总
 
 - 总任务数：42（T01–T42，T36–T42 为 2026-09-28/29 用户追加，原编号表无此 ID）
-- ✅ 已完成：27（T03,T04,T05,T08,T09,T10,T12,T13,T22,T24,T25,T26,T27,T28,T29,T31,T32,T33,T34,T35,T36,T37,T38,T39,T40,T41,T42）
-- 🔄 进行中：12（T02,T07,T11,T14,T15,T16,T17,T18,T19,T20,T21,T23）
+- ✅ 已完成：28（T03,T04,T05,T08,T09,T10,T12,T13,T18,T22,T24,T25,T26,T27,T28,T29,T31,T32,T33,T34,T35,T36,T37,T38,T39,T40,T41,T42）
+- 🔄 进行中：11（T02,T07,T11,T14,T15,T16,T17,T19,T20,T21,T23）
 - 🔄 精炼完成待真机验证：1（T06，部署顺序/9地图补点已修正，下兵颜色待 emulator-5556 复标）
 - 🔄 真机验证进行中：1（T30，emulator-5556 已在线，框架已通、待开 DO_CLAN_GAMES 开关实跑闭环）
 - ⏭ 跳过：1（T01，见决策记录）

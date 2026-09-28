@@ -18,12 +18,27 @@ object LogHelper {
     // Re-entry guard to prevent recursive calls (e.g. ShowMessage -> logAndRestart -> ShowMessage)
     private val isRestarting = AtomicBoolean(false)
 
-    // 每个日志文件保留的最大行数（滚动覆盖，仅保留最近 N 行）
-    // 临时调高到 2000：夜世界下兵诊断现在每轮打 3 行（卡扫描/选中卡/落点），
-    // 一场约 200 行，500 行会把前一场的关键部分滚掉，不利于排查。
-    private const val MAX_LOG_LINES = 2000
+    /**
+     * 日志按**小时**切分：`info_yyyyMMdd_HH.log` / `error_yyyyMMdd_HH.log`。
+     *
+     * 为什么是小时：复查问题时通常是"昨天下午 3 点左右出错"，按小时定位最直观；
+     * 保留两天也只有 48 个文件。10 分钟切分会有 288 个、5 分钟 576 个，
+     * 文件过多且文件名不直观，排查时反而是负担。
+     */
+    private const val LOG_RETENTION_HOURS = 48L
+
+    /** 单个日志文件超过该大小就分片（_part2/_part3），防止 VERBOSE 全量时单小时日志过大。 */
+    private const val MAX_LOG_FILE_BYTES = 2 * 1024 * 1024L
+
+    /** 兜底清理检查间隔：日志稀疏（长时间没跨小时）时也要能清掉过期文件。 */
+    private const val CLEANUP_INTERVAL_MS = 30 * 60 * 1000L
+
+    /** 清理过期日志时的锁，避免与写入并发产生竞争。 */
+    private val cleanupLock = Any()
 
     fun initTimber(context: Context) {
+        // 启动时先清一次过期日志，避免历史文件堆积
+        cleanupExpiredLogs(context)
         if (BuildConfig.DEBUG) {
             // 测试版：logcat + 文件全量(含详细 VERBOSE)，便于排查细节
             Timber.plant(Timber.DebugTree())
@@ -31,6 +46,50 @@ object LogHelper {
         } else {
             // 正式版：仅记录运行日志(>=INFO)与异常(WARN/ERROR)，不记录详细排错日志，避免文件过大
             Timber.plant(FileLoggingTree(context, Log.INFO))
+        }
+    }
+
+    /**
+     * 删除超过 [LOG_RETENTION_HOURS] 小时的日志文件（按**文件名里的时间戳**判断，
+     * 不依赖文件修改时间，避免拷贝/回写导致误判）。
+     *
+     * 调用时机：App 启动时（[initTimber]）+ 跨小时切文件时 + 每 [CLEANUP_INTERVAL_MS] 兜底检查。
+     */
+    fun cleanupExpiredLogs(context: Context) {
+        val dir = File(context.filesDir, "logs")
+        if (!dir.exists()) return
+        val cutoff = System.currentTimeMillis() - LOG_RETENTION_HOURS * 3600_000L
+        synchronized(cleanupLock) {
+            lastCleanupAt = System.currentTimeMillis()
+            val files = dir.listFiles() ?: return
+            for (file in files) {
+                // 优先按文件名里的时间戳判断；旧版 `info.log` 之类解析不出时间的，
+                // 退化为按最后修改时间判断，避免历史文件永久残留
+                val fileTime = parseFileHourMillis(file.name) ?: file.lastModified().takeIf { it > 0 }
+                if (fileTime == null) continue
+                if (fileTime < cutoff) {
+                    runCatching { file.delete() }
+                }
+            }
+        }
+    }
+
+    /** 最近一次执行清理的时间戳。 */
+    @Volatile
+    private var lastCleanupAt = 0L
+
+    /**
+     * 从日志文件名解析出该文件的小时起始时间（毫秒）。
+     * 支持 `info_20260929_13.log` / `info_20260929_13_part2.log`；旧版 `info.log` 返回 null（不处理）。
+     */
+    private fun parseFileHourMillis(fileName: String): Long? {
+        if (!fileName.endsWith(".log")) return null
+        val parts = fileName.removeSuffix(".log").split("_")
+        if (parts.size < 3) return null
+        return try {
+            SimpleDateFormat("yyyyMMdd_HH", Locale.US).parse(parts[1] + "_" + parts[2])?.time
+        } catch (e: Exception) {
+            null
         }
     }
 
@@ -60,7 +119,25 @@ object LogHelper {
         Timber.tag("zkq_debug").d("Debug info: $message")
     }
 
+    /**
+     * 文件日志：按**小时**切分文件，单文件超限分片，只保留最近 [LOG_RETENTION_HOURS] 小时。
+     *
+     * 相比旧实现（单文件 + 每条日志都全文件 readLines/writeText 做行数裁剪），
+     * 这里改为**保持打开的流顺序追加**，不再每条都重写整个文件，写入开销大幅下降。
+     */
     class FileLoggingTree(private val context: Context, private val minPriority: Int = Log.VERBOSE) : Timber.Tree() {
+
+        private val lock = Any()
+        private var currentHour = ""
+        private var currentBase = ""
+        private var partIndex = 0
+        private var currentFile: File? = null
+        private var currentStream: FileOutputStream? = null
+        private var currentBytes = 0L
+
+        private val hourFormat = SimpleDateFormat("yyyyMMdd_HH", Locale.US)
+        private val timeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault())
+
         @SuppressLint("LogNotTimber")
         override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
             // 低于最低记录级别的日志直接丢弃（正式版借此过滤详细排错日志）
@@ -69,30 +146,60 @@ object LogHelper {
             val logDir = File(context.filesDir, "logs")
             if (!logDir.exists()) logDir.mkdirs()
 
-            val fileName = if (priority >= Log.ERROR) "error.log" else "info.log"
-            val logFile = File(logDir, fileName)
-
-            val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault()).format(Date())
-            val logEntry = "$timestamp [$tag] $message\n"
-
-            try {
-                // Append log entry
-                FileOutputStream(logFile, true).use { fos ->
-                    fos.write(logEntry.toByteArray())
-                }
-
-                // Maintain MAX_LOG_LINES limit for each file (only keep the most recent N lines)
-                synchronized(this) {
-                    val lines = logFile.readLines()
-                    if (lines.size > MAX_LOG_LINES) {
-                        val trimmedLines = lines.takeLast(MAX_LOG_LINES)
-                        logFile.writeText(trimmedLines.joinToString("\n") + "\n")
-                    }
-                }
-            } catch (e: Exception) {
-                // Use standard Log to avoid infinite recursion if Timber fails
-                Log.e("FileLoggingTree", "Error writing to $fileName", e)
+            val base = if (priority >= Log.ERROR) "error" else "info"
+            val hour = hourFormat.format(Date())
+            val timestamp = timeFormat.format(Date())
+            val entry = buildString {
+                append(timestamp).append(" [").append(tag).append("] ").append(message).append('\n')
+                if (t != null) append(Log.getStackTraceString(t)).append('\n')
             }
+            val bytes = entry.toByteArray()
+
+            synchronized(lock) {
+                // 跨小时 / 切换 info↔error → 切到新文件（分片序号归零）
+                if (hour != currentHour || base != currentBase || currentStream == null) {
+                    partIndex = 0
+                    rotate(logDir, base, hour)
+                } else if (currentBytes >= MAX_LOG_FILE_BYTES) {
+                    // 单文件超限 → 分片，避免单个文件过大不好打开
+                    partIndex++
+                    rotate(logDir, base, hour)
+                }
+
+                // 定期清理（跨小时时必清一次，日志稀疏时靠间隔兜底）
+                if (System.currentTimeMillis() - lastCleanupAt > CLEANUP_INTERVAL_MS) {
+                    cleanupExpiredLogs(context)
+                }
+
+                try {
+                    currentStream?.write(bytes)
+                    currentBytes += bytes.size
+                } catch (e: Exception) {
+                    // Use standard Log to avoid infinite recursion if Timber fails
+                    Log.e("FileLoggingTree", "Error writing to ${currentFile?.name}", e)
+                }
+            }
+        }
+
+        /** 关闭当前流并按 (base, hour, 分片序号) 打开新文件。 */
+        private fun rotate(dir: File, base: String, hour: String) {
+            try {
+                currentStream?.close()
+            } catch (e: Exception) {
+                Log.e("FileLoggingTree", "Error closing ${currentFile?.name}", e)
+            }
+            val name = if (partIndex == 0) "${base}_${hour}.log" else "${base}_${hour}_part${partIndex}.log"
+            val file = File(dir, name)
+            currentFile = file
+            currentBytes = if (file.exists()) file.length() else 0L
+            currentStream = try {
+                FileOutputStream(file, true)
+            } catch (e: Exception) {
+                Log.e("FileLoggingTree", "Error opening $name", e)
+                null
+            }
+            currentHour = hour
+            currentBase = base
         }
     }
 }
