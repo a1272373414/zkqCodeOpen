@@ -35,6 +35,9 @@ object StorageKeys {
     const val DYNAMIC_ELIXIR = "DynamicElixir"
     const val DYNAMIC_DARK_ELIXIR = "DynamicDarkElixir"
 
+    // Per-account key for war base layout switching (换阵, T04): 目标阵型号 1~6，0/空=不换
+    const val WAR_BASE_LAYOUT = "WarBaseLayout"
+
     /**
      * Generate a storage key with account number suffix.
      * Used for per-account data that needs to be tracked separately.

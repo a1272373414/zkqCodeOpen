@@ -38,8 +38,8 @@
 
 | ID | 任务 | 目标文件(当前项目) | 工作量 | 优先级 | 源依据 | 状态 | 备注 |
 |---|---|---|---|---|---|---|---|
-| T04 | 换阵(战争基地阵型切换) | `jar/code/mainbase/warbase/ChangeWarBase.kt` | 1天 | 高 | 源 换阵(48) | ⬜ | 复用已有 CHANGE_BASE 设置，补逻辑 |
-| T05 | 协议弹窗双确认强化 | `jar/code/universal/smalltools/AgreementPopups.kt` | 0.5天 | 高 | 源 函数10a/301a | ⬜ | 腾讯协议双确认 + 谷歌"全部接受" |
+| T04 | 换阵(战争基地阵型切换) | `jar/code/universal/smalltools/ChangeWarBase.kt` | 1天 | 高 | 源 换阵(48) L55700-55783 | ✅ | 新建 `ChangeWarBase.changeWarBaseLayout(account)`：读 `CHANGE_BASE` 开关→取本账号目标阵型号(存 `StorageKeys.WAR_BASE_LAYOUT`，1~6，0/空=不换)→进战争基地编辑→开阵型列表→按阵型号点槽位(>3 先上滑)→解锁则点「装备」。按钮优先文字 `locate()` 定位、坐标作兜底；坐标按 90° 从竖屏换算横屏。挂在 `MainScript` 主循环 `enterMainScreen` 之后。`buildJar` 通过、0 lint |
+| T05 | 协议弹窗双确认强化 | `jar/code/universal/smalltools/AgreementPopups.kt` | 0.5天 | 高 | 源 函数10a/301a | ✅ | 新增 `AgreementPopups.handleAgreementPopups()`：用 T35 的 `ChineseTextReader.locate()` 按文字定位「全部接受/同意/QQ登录/登录/检查更新」，腾讯走「双确认」(点同意→下滑协议→再点同意)；挂在 `MainScript` 主循环 `enterMainScreen` 前；`locate()` 已支持全屏(不传区域)。`buildJar` 通过、0 lint |
 | T06 | 都城部署精炼 + 实机验证 | `jar/code/clancapital/attack/CapitalAttack.kt` | 2天 | 高 | 源 突袭打野 | ⏸ | 用户 2026-09-23 决定延后，先做夜世界 |
 | T22 | 都城突袭补齐：造兵按源两套打法+下兵第二轮扫描+9地图定位+总都城币统计+测试日志截图 | `jar/code/clancapital/*`、`colorschema/colorpackage/clancapital/*` | 2天 | 高 | 源 函数28a/29a/30a/31a + 可打地图 | ✅ | 用户 2026-09-26 要求补齐缺口且造兵方案按源；测试期加日志与截图存档 |
 | T23 | 聊天界面都城友谊战识别与进入（含下兵测试） | `jar/code/clancapital/attack/CapitalFriendlyChat.kt`、`colorschema/colorpackage/clancapital/CapitalFriendlyChatColors.kt`、`jar/code/clancapital/attack/CapitalAttack.kt` | 1天 | 高 | 实机：用户手动发起都城友谊战(不消耗突袭次数)用于都城下兵测试；红框标注于聊天卡片 | 🔄 | ①识别聊天卡片「绿侦察+红进攻+蓝详细信息」三按钮组合(`CapitalFriendlyChatColors`)，`enterCapitalFriendlyFromChat()` 点击红「进攻」进入，实机截图离线自检 0 假阳性；②新增 `playCapitalFriendlyChallenge()` 完整流程(进卡片→等放弃按钮→`capitalDeployArmy` 部署)，挂到 `runTestCode` 调试入口；`capitalDeployArmy` 新增 `zoomOut` 参数(友谊战首跑跳过战斗内缩放，待专项标定)；③下兵/法术颜色(CapitalDeployColors)与逻辑待友谊战实机验证标定 |
@@ -139,7 +139,7 @@
 ## 四、进度汇总
 
 - 总任务数：35（T01–T35）
-- ✅ 已完成：11（T22,T24,T25,T26,T27,T28,T29,T31,T32,T33,T35）
+- ✅ 已完成：13（T22,T24,T25,T26,T27,T28,T29,T31,T32,T33,T35,T05,T04）
 - 🔄 进行中：12（T02,T07,T11,T14,T15,T16,T17,T18,T19,T20,T21,T23）
 - ⬜ 待办：11（T01,T03–T05,T08–T10,T12,T13,T30,T34）
 - ⏸ 暂停：1（T06 延后）

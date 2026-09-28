@@ -1,6 +1,8 @@
 package com.coc.zkqcode.jar.code.universal.recognizer
 
+import android.graphics.Bitmap
 import android.graphics.Rect
+import com.coc.zkqcode.core.system.screencapture.ScreenCaptureManager
 
 /**
  * 面向业务的中文读取封装（T11 / T32）：部落名 / 村庄名 / 玩家名 / 竞赛任务描述。
@@ -111,20 +113,25 @@ object ChineseTextReader {
      */
     suspend fun locate(
         keyword: String,
-        startX: Int,
-        startY: Int,
-        endX: Int,
-        endY: Int,
+        startX: Int = 0,
+        startY: Int = 0,
+        endX: Int = -1,
+        endY: Int = -1,
         threshold: Int = 140,
         scale: Float = 2f,
         minConfidence: Float = 0f,
         requireCJK: Boolean = true
     ): Rect? {
+        // endX/endY <= 0 表示「全屏查找」：用截图实际尺寸作为搜索区域
+        val (sx, sy, ex, ey) = if (endX <= 0 || endY <= 0) {
+            val bmp = ScreenCaptureManager.capture(asBitmap = true) as? Bitmap
+            if (bmp != null) intArrayOf(0, 0, bmp.width, bmp.height) else intArrayOf(0, 0, 1280, 720)
+        } else intArrayOf(startX, startY, endX, endY)
         val mlkit = TextRecognizer.recognize(
-            startX = startX,
-            startY = startY,
-            endX = endX,
-            endY = endY,
+            startX = sx,
+            startY = sy,
+            endX = ex,
+            endY = ey,
             useChinese = true,
             threshold = threshold,
             invertBinarization = true,
@@ -139,10 +146,10 @@ object ChineseTextReader {
         } ?: return null
         val box = hit.position ?: return null
         // 反算回屏幕坐标：box 处于放大后的 bitmap，需 /scale 并加裁剪偏移
-        val left = (startX + box.left / scale).toInt()
-        val top = (startY + box.top / scale).toInt()
-        val right = (startX + box.right / scale).toInt()
-        val bottom = (startY + box.bottom / scale).toInt()
+        val left = (sx + box.left / scale).toInt()
+        val top = (sy + box.top / scale).toInt()
+        val right = (sx + box.right / scale).toInt()
+        val bottom = (sy + box.bottom / scale).toInt()
         return Rect(left, top, right, bottom)
     }
 }

@@ -31,6 +31,8 @@ import com.coc.zkqcode.jar.code.universal.smalltools.getConfigOrStop
 import com.coc.zkqcode.jar.code.universal.smalltools.readMemory
 import com.coc.zkqcode.jar.code.universal.smalltools.writeGameFiles
 import com.coc.zkqcode.jar.code.universal.smalltools.writeMemory
+import com.coc.zkqcode.jar.code.universal.smalltools.AgreementPopups
+import com.coc.zkqcode.jar.code.universal.smalltools.ChangeWarBase
 import com.coc.zkqcode.jar.code.mainbase.clan.donateToClan
 import com.coc.zkqcode.core.util.fileactions.LogHelper.logAndRestart
 import com.coc.zkqcode.jar.code.mainbase.herohall.upgradeGearsAndPets
@@ -107,10 +109,16 @@ suspend fun runMainScript() {
                 return@stepBlock
             }
 
+            // 协议弹窗处理（T05）：首启/切号重进可能卡在「同意/全部接受」，先清掉再进游戏
+            AgreementPopups.handleAgreementPopups()
+
             if (!enterMainScreen(true)) {
                 ShowMessage("进入游戏失败")
                 return@stepBlock
             }
+
+            // 战争基地阵型切换（T04）：CHANGE_BASE 开启且本账号配置了目标阵型时执行（0/未配置则不换）
+            ChangeWarBase.changeWarBaseLayout(InGamesVars.currentAccountNumber)
 
             if (!playBuilderBase()) {
                 ShowMessage("夜世界对战完成，准备进入主世界")
