@@ -43,6 +43,7 @@ import com.coc.zkqcode.jar.code.mainbase.daily.DailyRewards
 import com.coc.zkqcode.jar.code.mainbase.clan.CapitalCoinDonate
 import com.coc.zkqcode.jar.code.mainbase.clan.ClanApprove
 import com.coc.zkqcode.jar.code.mainbase.buildings.PlaceNewBuilding
+import com.coc.zkqcode.jar.code.universal.smalltools.FontHarvest
 import com.coc.zkqcode.core.util.fileactions.LogHelper.logAndRestart
 import com.coc.zkqcode.jar.code.mainbase.herohall.upgradeGearsAndPets
 import com.coc.zkqcode.jar.code.mainbase.others.mainBaseCheckTutorials
@@ -125,6 +126,10 @@ suspend fun runMainScript() {
                 ShowMessage("进入游戏失败")
                 return@stepBlock
             }
+
+            // 中文字库自动采集（T34）：AUTO_HARVEST_FONT 开启时按节流间隔采集一轮。
+            // 放在进主界面之后、进攻等时序敏感动作之前的空闲时机（耗时约 2~3 秒）。
+            FontHarvest.maybeHarvest(InGamesVars.currentAccountNumber)
 
             // 战争基地阵型切换（T04）：CHANGE_BASE 开启且本账号配置了目标阵型时执行（0/未配置则不换）
             ChangeWarBase.changeWarBaseLayout(InGamesVars.currentAccountNumber)

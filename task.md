@@ -91,6 +91,7 @@
 | T32 | 中文文本读取封装（部落名/村庄名/玩家名/任务描述） | `jar/code/universal/recognizer/ChineseTextReader.kt` | 0.5天 | 中 | 业务需要 | ✅ | 封装 `TextRecognizer`：区域读取、结果清洗、ML Kit 无结果回落 `PixelFontChinese`；`containsAny()` 做"建筑大师"等关键字包含匹配；编译通过 |
 | T33 | 竞赛接入中文 OCR：已接任务区分「主世界 / 夜世界(建筑大师)」 | `jar/code/mainbase/clangames/ClanGames.kt` | 0.5天 | 中 | 源 L33948 OCR 判「建筑大师」 | ✅ | 补 T27 缺口：`detectAcceptedTaskType()` 点开已接任务 → OCR(661,167,799,242) → 含"建筑大师"记 night 否则 main；`ClanGamesState` 增 `isNightTask`，记忆值改 `night/main/0`，`BuilderBaseAttack` 仅 `== "night"` 时切用"接取竞赛后"局数；编译通过 |
 | T34 | 真机采集中文字模 + 中文识别验证 | 采集工具 + 字库常量 | 0.5天 | 中 | — | ✅ | **2026-09-29 真机闭环验证通过**。①触发入口已接线：主页调试按钮「采集字模(T34)」（独立成行；点击后先停 UIWindowService 悬浮窗防其入镜→切 COC→轮询等前台→采集）+ 广播 `com.coc.zkqcode.HARVEST`（HarvestReceiver，同样先关悬浮窗；注意 force-stop 后 App 处于 stopped 状态会吞广播，需先启动一次）；②`saveHarvested` 改为保存前先 cat 回读旧字库合并，杜绝会话间互相覆盖；③**顺带修复重大 bug**：`ShellScreenCapture` 持久 root shell 每次捕获后立即断开重连——原实现整个进程会话都返回第一帧（陈旧竖屏面板图），bot 所有识别都建立在冻结画面上（"重复未识别"停机的根因之一）；④真机实测：截屏 1280×720 实时游戏画面，采集部落聊天/挑战卡/商店等真实文字，字库累计 394 条（/sdcard/zkqFiles/chinese_font.txt）。遗留：ML Kit 老师偶发误标（模→摸、账→顶、并→井、免费→免轰等）需 PC 端 `harvest_chinese_font.py` 去噪；悬浮提示文字也会入镜（已正确标注，污染小）。`buildJar`+`assembleDebug` 通过、0 lint |
+| T42 | 字库去噪三层（拦截 / 清洗 / 自动采集） | `PixelFontChinese.kt` + `tools/clean_chinese_font.py` + `jar/.../smalltools/FontHarvest.kt` | 1天 | 中 | T34 收尾 | ✅ | 用户 2026-09-29 追加（原编号表无此 ID）。针对 ML Kit 自动标注偶发误标（模→摸、账→顶、并→井）与切框偏移做三层治理：①**入库拦截**：`PixelFontChinese.addGlyph` 入库前校验——同字样本一致率 <0.80 判可疑丢弃、与另一字样本 ≥0.93 判 ML Kit 误标丢弃，汇总 `flushRejectionLog` 输出（真机实测一轮丢弃 98 条，含「间→问(1.00)」「极→概(1.00)」明确误标）；②**切框加权**：`harvestFromScreen` 由纯等分改为中文 1 份宽 / 其它字符 0.5 份宽的**加权切分**——原等分在 element 混有数字英文（"40s"/"5/8"）时整体偏移，采出的字全是错位的（这是"同字样本彼此仅 0.6~0.8 一致"的根因）；③**PC 清洗脚本** `tools/clean_chinese_font.py`：按 (字, 尺寸±2) 聚类取主簇，可疑条目跨字比对后改判/删除，**默认只高置信改判、不删无归属**（实测对 394 条脏库报告改判 7、可疑保留 168；对新库 31 条零误杀）；④**bot 自动采集** `FontHarvest.maybeHarvest`：开关 `AUTO_HARVEST_FONT`（默认关）+ 节流键 `FONT_HARVEST_LAST`（15 分钟）+ 累计 40 条落盘，挂在 `MainScript` 进主界面之后的空闲时机（绝不放时序敏感路径）。**整库重建已执行**：旧 394 条脏库备份于 `temp/2026-09-29/chinese_font_old.txt`，清空后重新采得干净 31 条（进攻/明心见性/飞天小/小时/分钟/新版/商店/免费），后续由 bot 自动积累。`buildJar`+`assembleDebug` 通过、0 lint |
 | T35 | 文字按钮定位 `ChineseTextReader.locate()`（按文案定位 + 坐标反算） | `jar/code/universal/recognizer/ChineseTextReader.kt` | 0.5天 | 中 | T11 收尾/补充 | ✅ | ML Kit 文字识别结果带包围盒，新增 `locate(keyword,...)`：识别→命中含关键字行→包围盒 `/scale`+裁剪偏移反算回屏幕坐标返回 `Rect`；复用 `minConfidence`/`requireCJK` 双闸；调用方自行降级（回退颜色匹配/跳过）。`buildJar` 通过、0 lint |
 | T36 | 训练部队/法术（主世界） | `jar/code/mainbase/troop/TrainTroops.kt` | 1.5天 | 中 | 源 造兵(241a/239a/240a) Q段 L34253-41171 | ✅ | 用户 2026-09-28 追加（原编号表无此 ID）。新建 `TrainTroops.trainTroops(account)`：读 `TRAIN_ENABLED` 开关→进军队/造兵栏(文字 locate)→按账号记忆键 `Train_<兵种/法术>` 数量逐个文字定位+连点「训练」。源「左中右栏切换+单位占用扣减+活动兵/超级兵强化」待 T30 复标。`buildJar` 通过、0 lint、挂 MainScript |
 | T37 | 升级建筑（主世界） | `jar/code/mainbase/upgrade/Upgrade.kt` | 2天 | 中 | 源 升级(202a/205a/206a) P段 L24387-34252 | ✅ | 用户 2026-09-28 追加（原编号表无此 ID）。新建 `Upgrade.upgradeBuildings(account)`：读 `UPGRADE_ENABLED` 开关→开商店/建筑列表(文字 locate)→按账号记忆键 `Upgrade_<建筑>` 逐个定位+点「升级」+「确定」。源「建筑列表 OCR 扫描+空闲工人判断+宝石秒」待 T30 复标（OCR 字库 jianzhu0.txt）。`buildJar` 通过、0 lint、挂 MainScript |
@@ -140,13 +141,14 @@
 | 村庄改名 | ❌ 不抄 | 用户 2026-09-23 明确决定 | 2026-09-23 |
 | 部落靓标签筛选 | ❌ 不抄 | 用户 2026-09-23 明确决定 | 2026-09-23 |
 | T01 坐标归一化集成 pass | ⏭ 跳过 | 用户 2026-09-28：固定 1280×720 环境收益≈0，`CoordNormalizer` 机制已写好留作备用 | 2026-09-28 |
+| 中文字库「同尺寸多字体变体」支持 | ⏭ 暂不改 | 用户 2026-09-29：字库定位是兜底，命中率下降可接受，识别不中会返回空串交回 ML Kit（宁可不认、不错认）。**已知限制**：同字同尺寸只保留先采到的一种字形（`addGlyph` 的 key=`字_宽x高`），另一种字体/描边变体进不了库；采集二值化写死 `binarize(200,255,60)`，金色/红色/重描边字采不到。将来若命中率不足，改法：同 key 先比形状，相似≥0.90 去重、<0.90 作变体入库（识别侧 `matchGlyph` 取最高分无需改） | 2026-09-29 |
 
 ---
 
 ## 四、进度汇总
 
-- 总任务数：41（T01–T41，T36–T41 为 2026-09-28 用户追加，原编号表无此 ID）
-- ✅ 已完成：26（T03,T04,T05,T08,T09,T10,T12,T13,T22,T24,T25,T26,T27,T28,T29,T31,T32,T33,T34,T35,T36,T37,T38,T39,T40,T41）
+- 总任务数：42（T01–T42，T36–T42 为 2026-09-28/29 用户追加，原编号表无此 ID）
+- ✅ 已完成：27（T03,T04,T05,T08,T09,T10,T12,T13,T22,T24,T25,T26,T27,T28,T29,T31,T32,T33,T34,T35,T36,T37,T38,T39,T40,T41,T42）
 - 🔄 进行中：12（T02,T07,T11,T14,T15,T16,T17,T18,T19,T20,T21,T23）
 - 🔄 精炼完成待真机验证：1（T06，部署顺序/9地图补点已修正，下兵颜色待 emulator-5556 复标）
 - 🔄 真机验证进行中：1（T30，emulator-5556 已在线，框架已通、待开 DO_CLAN_GAMES 开关实跑闭环）

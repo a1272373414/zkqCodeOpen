@@ -166,18 +166,33 @@ object PixelFontChinese {
                     val text = element.text
                     if (text.isEmpty()) continue
                     if (onlyChinese && text.none { it in '\u4e00'..'\u9fff' }) continue
-                    val perCharWidth = box.width().toFloat() / text.length
+                    // 等分切框的前提是"框宽 = 字数 × 字宽"，一旦 element 里混了数字/英文
+                    // （如 "40s"、"5/8"）纯等分就会整体偏移。这里按**加权宽度**切：
+                    // 中文占 1 份宽，其它字符按半宽估算，既保住采集量又显著减少偏移。
+                    val weights = DoubleArray(text.length) {
+                        if (text[it] in '\u4e00'..'\u9fff') 1.0 else 0.5
+                    }
+                    val totalWeight = weights.sum()
+                    if (totalWeight <= 0.0) continue
+                    val unit = box.width().toFloat() / totalWeight.toFloat()
+                    var cursor = box.left.toFloat()
                     for ((index, ch) in text.withIndex()) {
-                        if (onlyChinese && ch !in '\u4e00'..'\u9fff') continue
-                        val left = (box.left + index * perCharWidth).toInt()
-                        val right = (box.left + (index + 1) * perCharWidth).toInt()
-                        val glyph = encodeComponent(ink, screen.width, left, box.top, right, box.bottom, ch.toString())
-                        if (glyph != null && addGlyph(glyph)) added++
+                        val charWidth = unit * weights[index].toFloat()
+                        if (ch in '\u4e00'..'\u9fff') {
+                            val left = cursor.toInt()
+                            val right = (cursor + charWidth).toInt()
+                            val glyph = encodeComponent(
+                                ink, screen.width, left, box.top, right, box.bottom, ch.toString()
+                            )
+                            if (glyph != null && addGlyph(glyph)) added++
+                        }
+                        cursor += charWidth
                     }
                 }
             }
         }
         ShowMessage("中文字库采集：本轮新增 $added 个字模，累计 ${size()} 个")
+        flushRejectionLog()
         added
     }
 
@@ -208,6 +223,7 @@ object PixelFontChinese {
             if (addGlyph(glyph)) merged++
         }
         if (merged > 0) ShowMessage("中文字库合并已有 $merged 条")
+        flushRejectionLog()
     }
 
     /** 把采集到的字模写到 [HARVEST_PATH]（经 WebSocket 文件通道，与 Memory.kt 同一套机制）。 */
@@ -308,11 +324,112 @@ object PixelFontChinese {
         return Glyph(text, w, h, bits)
     }
 
+    // ---------------------------------------------------------------- 采集去重与校验
+
+    /**
+     * 同字样本的最低一致率：低于它说明这条形状与该字已有样本差异过大，
+     * 可能是 ML Kit 标错、也可能是切框偏移，宁可不入库。
+     */
+    private const val SAME_TEXT_MIN_AGREEMENT = 0.80
+
+    /**
+     * 跨字"抢标签"阈值：本条与另一个字的样本相似度 ≥ 此值，
+     * 判定为 ML Kit 把该字错标成了当前字（如把「模」标成「摸」），直接丢弃。
+     */
+    private const val CROSS_TEXT_STEAL_AGREEMENT = 0.93
+
+    /** 校验尺寸容差（同一字在不同界面渲染尺寸会差 1~2 px）。 */
+    private const val VALIDATE_SIZE_TOLERANCE = 2
+
+    /** 被校验丢弃的条数（汇总输出，避免每条都弹提示刷屏）。 */
+    private var rejectedCount = 0
+
+    /** 被丢弃条目的人类可读原因（最多留 8 条样例）。 */
+    private val rejectionSamples = ArrayList<String>()
+
+    /**
+     * 入库前校验：返回 null 表示通过，否则返回丢弃原因。
+     *
+     * ML Kit 自动标注会偶发把形近字标错（实测 模→摸、账→顶、并→井、免费→免轰），
+     * 这类错误是"像素对、标签错"，单条看不出来，但字库里有同一字的其它样本时就能比对出来。
+     */
+    private fun inspectGlyph(glyph: Glyph): String? {
+        var bestSame: Glyph? = null
+        var bestSameScore = 0.0
+        var bestOther: Glyph? = null
+        var bestOtherScore = 0.0
+        var bestOtherText = ""
+
+        for (other in glyphs + runtimeGlyphs) {
+            if (abs(other.width - glyph.width) > VALIDATE_SIZE_TOLERANCE) continue
+            if (abs(other.height - glyph.height) > VALIDATE_SIZE_TOLERANCE) continue
+            val score = glyphAgreement(glyph, other)
+            if (other.text == glyph.text) {
+                if (score > bestSameScore) {
+                    bestSameScore = score
+                    bestSame = other
+                }
+            } else if (score > bestOtherScore) {
+                bestOtherScore = score
+                bestOtherText = other.text
+                bestOther = other
+            }
+        }
+
+        // 1) 更像另一个字 → 判定 ML Kit 误标，丢弃
+        if (bestOther != null && bestOtherScore >= CROSS_TEXT_STEAL_AGREEMENT &&
+            bestOtherScore > bestSameScore
+        ) {
+            return "更像「$bestOtherText」(%.2f)，判定 ML Kit 误标".format(bestOtherScore)
+        }
+        // 2) 已有同字样本但形状差太多 → 可疑，丢弃
+        if (bestSame != null && bestSameScore < SAME_TEXT_MIN_AGREEMENT) {
+            return "与已有「${glyph.text}」样本仅 %.2f 一致，判为可疑".format(bestSameScore)
+        }
+        // 3) 库里还没有可比对样本（首个样本）→ 放行
+        return null
+    }
+
+    /** 两个字模之间的对齐一致率（与识别时 [paddedAgreement] 同口径）。 */
+    private fun glyphAgreement(a: Glyph, b: Glyph): Double {
+        val rows = maxOf(a.height, b.height)
+        val cols = maxOf(a.width, b.width)
+        var matched = 0
+        for (y in 0 until rows) {
+            for (x in 0 until cols) {
+                val bitA = y < a.height && x < a.width && a.bits[y * a.width + x]
+                val bitB = y < b.height && x < b.width && b.bits[y * b.width + x]
+                if (bitA == bitB) matched++
+            }
+        }
+        return matched.toDouble() / (rows * cols).toDouble()
+    }
+
+    /**
+     * 采集入库：先做 [inspectGlyph] 一致性校验，通过后才写入，避免误标污染字库。
+     * @return 是否新入库
+     */
     private fun addGlyph(glyph: Glyph): Boolean {
         val key = glyph.text + "_" + glyph.width + "x" + glyph.height
-        if (!harvestedKeys.add(key)) return false
+        if (harvestedKeys.contains(key)) return false
+        val reason = inspectGlyph(glyph)
+        if (reason != null) {
+            rejectedCount++
+            if (rejectionSamples.size < 8) rejectionSamples.add("「${glyph.text}」" + reason)
+            return false
+        }
+        harvestedKeys.add(key)
         runtimeGlyphs.add(glyph)
         return true
+    }
+
+    /** 输出并清空校验丢弃汇总（每轮采集/合并结束时调用）。 */
+    private fun flushRejectionLog() {
+        if (rejectedCount == 0) return
+        val detail = rejectionSamples.joinToString("；")
+        ShowMessage("字模校验丢弃 $rejectedCount 条：$detail")
+        rejectedCount = 0
+        rejectionSamples.clear()
     }
 
     // ---------------------------------------------------------------- 识别管线

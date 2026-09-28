@@ -77,6 +77,13 @@ object StorageKeys {
     // 放置新建筑目标（按账号，建筑名关键字，如「箭塔」「兵营」「墙」；空=不放置）
     const val PLACE_BUILDING_TARGET = "PlaceBuildingTarget"
 
+    // 中文字库自动采集主开关（T34）：按账号，1=开启。开启后 bot 跑图过程中会定期
+    // 用 ML Kit 当老师自动采集中文字模，默认关闭以免拖慢主流程。
+    const val AUTO_HARVEST_FONT = "AutoHarvestFont"
+
+    // 中文字库自动采集节流：上次采集时间戳（毫秒），按账号记录
+    const val FONT_HARVEST_LAST = "FontHarvestLast"
+
     /**
      * Generate a storage key with account number suffix.
      * Used for per-account data that needs to be tracked separately.
