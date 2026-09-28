@@ -38,6 +38,9 @@ object StorageKeys {
     // Per-account key for war base layout switching (换阵, T04): 目标阵型号 1~6，0/空=不换
     const val WAR_BASE_LAYOUT = "WarBaseLayout"
 
+    // 商人/每周精选购买主开关（T08）：按账号，1=开启
+    const val TRADER_ENABLED = "TraderEnabled"
+
     /**
      * Generate a storage key with account number suffix.
      * Used for per-account data that needs to be tracked separately.

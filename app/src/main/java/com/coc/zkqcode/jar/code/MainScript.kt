@@ -33,6 +33,7 @@ import com.coc.zkqcode.jar.code.universal.smalltools.writeGameFiles
 import com.coc.zkqcode.jar.code.universal.smalltools.writeMemory
 import com.coc.zkqcode.jar.code.universal.smalltools.AgreementPopups
 import com.coc.zkqcode.jar.code.universal.smalltools.ChangeWarBase
+import com.coc.zkqcode.jar.code.universal.smalltools.Trader
 import com.coc.zkqcode.jar.code.mainbase.clan.donateToClan
 import com.coc.zkqcode.core.util.fileactions.LogHelper.logAndRestart
 import com.coc.zkqcode.jar.code.mainbase.herohall.upgradeGearsAndPets
@@ -119,6 +120,9 @@ suspend fun runMainScript() {
 
             // 战争基地阵型切换（T04）：CHANGE_BASE 开启且本账号配置了目标阵型时执行（0/未配置则不换）
             ChangeWarBase.changeWarBaseLayout(InGamesVars.currentAccountNumber)
+
+            // 每周精选 / 商人购买（T08）：TRADER_ENABLED 开启且本账号配置了商品开关时执行
+            Trader.purchaseWeeklySelection(InGamesVars.currentAccountNumber)
 
             if (!playBuilderBase()) {
                 ShowMessage("夜世界对战完成，准备进入主世界")
