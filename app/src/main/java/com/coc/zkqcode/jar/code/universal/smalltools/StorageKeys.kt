@@ -41,6 +41,11 @@ object StorageKeys {
     // 商人/每周精选购买主开关（T08）：按账号，1=开启
     const val TRADER_ENABLED = "TraderEnabled"
 
+    // 部落战进攻主开关（T09）：按账号，1=开启
+    const val CLAN_WAR_ENABLED = "ClanWarEnabled"
+    // 部落战「留1刀」：开启时仅剩 1 次机会则跳过（源「留一次进攻机会」）
+    const val CLAN_WAR_KEEP_ONE = "ClanWarKeepOne"
+
     /**
      * Generate a storage key with account number suffix.
      * Used for per-account data that needs to be tracked separately.

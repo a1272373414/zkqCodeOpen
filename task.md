@@ -45,7 +45,7 @@
 | T23 | 聊天界面都城友谊战识别与进入（含下兵测试） | `jar/code/clancapital/attack/CapitalFriendlyChat.kt`、`colorschema/colorpackage/clancapital/CapitalFriendlyChatColors.kt`、`jar/code/clancapital/attack/CapitalAttack.kt` | 1天 | 高 | 实机：用户手动发起都城友谊战(不消耗突袭次数)用于都城下兵测试；红框标注于聊天卡片 | 🔄 | ①识别聊天卡片「绿侦察+红进攻+蓝详细信息」三按钮组合(`CapitalFriendlyChatColors`)，`enterCapitalFriendlyFromChat()` 点击红「进攻」进入，实机截图离线自检 0 假阳性；②新增 `playCapitalFriendlyChallenge()` 完整流程(进卡片→等放弃按钮→`capitalDeployArmy` 部署)，挂到 `runTestCode` 调试入口；`capitalDeployArmy` 新增 `zoomOut` 参数(友谊战首跑跳过战斗内缩放，待专项标定)；③下兵/法术颜色(CapitalDeployColors)与逻辑待友谊战实机验证标定 |
 | T07 | 部落竞赛 ClanGames | `jar/code/mainbase/clangames/ClanGames.kt` + Settings + colorpackage | 2天 | 高 | 源 竞赛(135) | 🔄 | 已拆分为 **T25–T30**（见「部落竞赛（T07 拆分）」章节）；T25–T29 代码落地完成，**T30 真机标定验证通过后才置 ✅** |
 | T08 | 每周精选/商人购买 | `jar/code/universal/smalltools/Trader.kt` | 1.5天 | 高 | 源 商人(18)+精选(20) L42550-44297 | ✅ | 新建 `Trader.purchaseWeeklySelection(account)`：读 `TRADER_ENABLED` 开关→进商人(文字 locate)→进「每周精选」标签→按商品开关(`Trader_<商品名>` 记忆键，默认关)逐个文字定位购买+点「确认」→领免费物品。源 2023 像素坐标/预算校验(bi)待真机复标(T30)，改用文字定位抗皮肤。挂在 `MainScript` 主循环 `enterMainScreen` 后。`buildJar` 通过、0 lint |
-| T09 | 部落战进攻 ClanWar | `jar/code/mainbase/clanwar/ClanWar.kt` | 2天 | 高 | 源 部落战(209) | ⬜ | 复用 MainBaseDeployTroops 部署器 |
+| T09 | 部落战进攻 ClanWar | `jar/code/mainbase/clan/ClanWar.kt` | 2天 | 高 | 源 部落战(209) L21372-22139 + 发起进攻 L23105-23145 | ✅ | 新建 `ClanWar.clanWarAttack(account)`：读 `CLAN_WAR_ENABLED` 开关→进部落(locate/兜底坐标)→判战斗日+剩余机会(locate「进攻」)→选敌开战(locate「进攻」「开始战斗」,源 1FBC6D 绿待 T30 复标)→**下兵复用主世界 `mainBaseDeployTroops()`**→等放弃按钮(EndBattle/GiveUpButton 同 mainBaseAttack)。支持「留1刀」(`CLAN_WAR_KEEP_ONE`)。挂在 `MainScript` 主循环。`buildJar` 通过、0 lint |
 
 ### 部落竞赛（T07 拆分，对齐源 函数230a/231a/232a/233a + L42649 调度）
 
@@ -139,7 +139,7 @@
 ## 四、进度汇总
 
 - 总任务数：35（T01–T35）
-- ✅ 已完成：14（T22,T24,T25,T26,T27,T28,T29,T31,T32,T33,T35,T05,T04,T08）
+- ✅ 已完成：15（T22,T24,T25,T26,T27,T28,T29,T31,T32,T33,T35,T05,T04,T08,T09）
 - 🔄 进行中：12（T02,T07,T11,T14,T15,T16,T17,T18,T19,T20,T21,T23）
 - ⬜ 待办：11（T01,T03–T05,T08–T10,T12,T13,T30,T34）
 - ⏸ 暂停：1（T06 延后）
