@@ -33,6 +33,14 @@ object CameraState {
     @Volatile
     var builderBaseZoomedOut: Boolean = false
 
+    /** 主世界当前缩放等级（0=最近 … 3=最远），-1=未知。由 MapLocator 写入。 */
+    @Volatile
+    var mainVillageZoomLevel: Int = -1
+
+    /** 夜世界当前缩放等级，语义同 [mainVillageZoomLevel]。 */
+    @Volatile
+    var builderBaseZoomLevel: Int = -1
+
     /**
      * 标记主世界镜头"已被放大/平移/切场景"，不再是可复用的远景。
      * 调用点：都城入口放大（源 函数319a 内置 `已缩小画面=false`）、进入主世界成功
@@ -61,6 +69,8 @@ object CameraState {
     fun reset() {
         mainVillageZoomedOut = false
         builderBaseZoomedOut = false
+        mainVillageZoomLevel = -1
+        builderBaseZoomLevel = -1
     }
 }
 

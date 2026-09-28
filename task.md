@@ -99,8 +99,8 @@
 
 | ID | 任务 | 目标文件(当前项目) | 工作量 | 优先级 | 源依据 | 状态 | 备注 |
 |---|---|---|---|---|---|---|---|
-| T12 | 大字号 OCR | `jar/code/.../recognizer/PixelFontLarge.kt` | 0.5天 | 低 | 源 函数315a(19×18) | ⬜ | 大数字字库 |
-| T13 | 地图缩放检测移植 | `jar/code/universal/map/MapLocator.kt` | 1天 | 低 | 源 coc-assist MapLocator | ⬜ | 四边缘森林色占比→缩放0-3 |
+| T12 | 大字号 OCR | `jar/code/universal/recognizer/PixelFontLarge.kt` + `PixelFontOcr.kt`/`PixelFontDigits.kt` | 0.5天 | 低 | 源 函数315a(19×18) | ✅ | 新建 `PixelFontLarge`（复用既有 `PixelFontOcr` 通用点阵引擎 + `PIXEL_FONT_DIGITS` 字库）：`recognize()` 用大字调优参数（maxGlyphSize=60/sizeTolerance=4/minGlyphHeight=10、亮色低饱和 ink），`recognizeRegion()` 截屏区域识别，`digitsOnly()` 抠数字。源 函数315a 二值化 0-251、精确字库/亮饱和区间待 T30 真机复标。`buildJar` 通过、0 lint |
+| T13 | 地图缩放检测移植 | `jar/code/universal/map/MapLocator.kt` + `CameraState` | 1天 | 低 | 源 coc-assist MapLocator | ✅ | 新建 `MapLocator`：`detectZoomLevel()` 截屏四边边缘带(EDGE_BAND_PX=40)统计森林暗绿占比→0-3 级（阈值 ZOOM_RATIO_THRESHOLDS 待 T30 复标）；`detectMainVillageZoomLevel`/`detectBuilderBaseZoomLevel` 写 `CameraState.mainVillageZoomLevel/builderBaseZoomLevel`；`setMainVillageZoomLevel(target)` 单调 pinch 逼近（pinchIn=拉远/pinchOut=拉近，坐标同 ZoomSmallMainBase，待 T30 复标）。`CameraState` 增两等级字段并在 reset() 复位。`buildJar` 通过、0 lint |
 
 ### 夜世界（Builder Base）增强（对齐源 函数123a/323a）
 
@@ -141,10 +141,10 @@
 ## 四、进度汇总
 
 - 总任务数：37（T01–T37，T36/T37 为 2026-09-28 用户追加的训练/升级，原编号表无此 ID）
-- ✅ 已完成：19（T03,T04,T05,T08,T09,T10,T22,T24,T25,T26,T27,T28,T29,T31,T32,T33,T35,T36,T37）
+- ✅ 已完成：21（T03,T04,T05,T08,T09,T10,T12,T13,T22,T24,T25,T26,T27,T28,T29,T31,T32,T33,T35,T36,T37）
 - 🔄 进行中：12（T02,T07,T11,T14,T15,T16,T17,T18,T19,T20,T21,T23）
 - 🔄 精炼完成待真机验证：1（T06，部署顺序/9地图补点已修正，下兵颜色待 emulator-5556 复标）
-- ⬜ 待办：5（T01,T12,T13,T30,T34）
+- ⬜ 待办：3（T01,T30,T34）
 - ❌ 不抄/取消：2（村庄改名、部落靓标签，见决策记录）
 
 ---
