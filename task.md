@@ -90,7 +90,7 @@
 | T31 | 中文像素字库框架（解析 + 匹配 + 采集）+ 采集工具 | `jar/code/universal/recognizer/PixelFontChinese.kt`、`tools/harvest_chinese_font.py` | 1天 | 中 | 复用 `PixelFontOcr` 管线 | ✅ | 字库格式/64进制与 `PixelFontDigits` 完全一致；**新增"字格合并"逻辑**：把相邻笔画/偏旁（如"明=日+月"、"性=忄+生"）合并成字格后再匹配，避免拆字；App 端 `harvestFromScreen()` 用 ML Kit 当"老师"自动标注采集；PC 侧 `tools/validate_chinese_ocr.py` 用 `cocfz-apk-test` 里的截图做离线验证；`gradlew :app:buildJar` 通过 |
 | T32 | 中文文本读取封装（部落名/村庄名/玩家名/任务描述） | `jar/code/universal/recognizer/ChineseTextReader.kt` | 0.5天 | 中 | 业务需要 | ✅ | 封装 `TextRecognizer`：区域读取、结果清洗、ML Kit 无结果回落 `PixelFontChinese`；`containsAny()` 做"建筑大师"等关键字包含匹配；编译通过 |
 | T33 | 竞赛接入中文 OCR：已接任务区分「主世界 / 夜世界(建筑大师)」 | `jar/code/mainbase/clangames/ClanGames.kt` | 0.5天 | 中 | 源 L33948 OCR 判「建筑大师」 | ✅ | 补 T27 缺口：`detectAcceptedTaskType()` 点开已接任务 → OCR(661,167,799,242) → 含"建筑大师"记 night 否则 main；`ClanGamesState` 增 `isNightTask`，记忆值改 `night/main/0`，`BuilderBaseAttack` 仅 `== "night"` 时切用"接取竞赛后"局数；编译通过 |
-| T34 | 真机采集中文字模 + 中文识别验证 | 采集工具 + 字库常量 | 0.5天 | 中 | — | 🔄 | **2026-09-28 emulator-5556 已在线**：ML Kit 中文识别（harvest 的"老师"）真机已验证（bot 实时识别「部落聊天框」等中文成功）；**但 `PixelFontChinese.harvestFromScreen()` 全代码库无调用方——采集字模的 UI 触发入口尚未接线**，故真机自动采集暂不可触发。需补一个触发入口（如主页调试按钮）后，再跑 `harvestFromScreen` 采集部落名/村庄名高频字并验证 `detectAcceptedTaskType` 命中率 |
+| T34 | 真机采集中文字模 + 中文识别验证 | 采集工具 + 字库常量 | 0.5天 | 中 | — | ✅ | **2026-09-29 真机闭环验证通过**。①触发入口已接线：主页调试按钮「采集字模(T34)」（独立成行；点击后先停 UIWindowService 悬浮窗防其入镜→切 COC→轮询等前台→采集）+ 广播 `com.coc.zkqcode.HARVEST`（HarvestReceiver，同样先关悬浮窗；注意 force-stop 后 App 处于 stopped 状态会吞广播，需先启动一次）；②`saveHarvested` 改为保存前先 cat 回读旧字库合并，杜绝会话间互相覆盖；③**顺带修复重大 bug**：`ShellScreenCapture` 持久 root shell 每次捕获后立即断开重连——原实现整个进程会话都返回第一帧（陈旧竖屏面板图），bot 所有识别都建立在冻结画面上（"重复未识别"停机的根因之一）；④真机实测：截屏 1280×720 实时游戏画面，采集部落聊天/挑战卡/商店等真实文字，字库累计 394 条（/sdcard/zkqFiles/chinese_font.txt）。遗留：ML Kit 老师偶发误标（模→摸、账→顶、并→井、免费→免轰等）需 PC 端 `harvest_chinese_font.py` 去噪；悬浮提示文字也会入镜（已正确标注，污染小）。`buildJar`+`assembleDebug` 通过、0 lint |
 | T35 | 文字按钮定位 `ChineseTextReader.locate()`（按文案定位 + 坐标反算） | `jar/code/universal/recognizer/ChineseTextReader.kt` | 0.5天 | 中 | T11 收尾/补充 | ✅ | ML Kit 文字识别结果带包围盒，新增 `locate(keyword,...)`：识别→命中含关键字行→包围盒 `/scale`+裁剪偏移反算回屏幕坐标返回 `Rect`；复用 `minConfidence`/`requireCJK` 双闸；调用方自行降级（回退颜色匹配/跳过）。`buildJar` 通过、0 lint |
 | T36 | 训练部队/法术（主世界） | `jar/code/mainbase/troop/TrainTroops.kt` | 1.5天 | 中 | 源 造兵(241a/239a/240a) Q段 L34253-41171 | ✅ | 用户 2026-09-28 追加（原编号表无此 ID）。新建 `TrainTroops.trainTroops(account)`：读 `TRAIN_ENABLED` 开关→进军队/造兵栏(文字 locate)→按账号记忆键 `Train_<兵种/法术>` 数量逐个文字定位+连点「训练」。源「左中右栏切换+单位占用扣减+活动兵/超级兵强化」待 T30 复标。`buildJar` 通过、0 lint、挂 MainScript |
 | T37 | 升级建筑（主世界） | `jar/code/mainbase/upgrade/Upgrade.kt` | 2天 | 中 | 源 升级(202a/205a/206a) P段 L24387-34252 | ✅ | 用户 2026-09-28 追加（原编号表无此 ID）。新建 `Upgrade.upgradeBuildings(account)`：读 `UPGRADE_ENABLED` 开关→开商店/建筑列表(文字 locate)→按账号记忆键 `Upgrade_<建筑>` 逐个定位+点「升级」+「确定」。源「建筑列表 OCR 扫描+空闲工人判断+宝石秒」待 T30 复标（OCR 字库 jianzhu0.txt）。`buildJar` 通过、0 lint、挂 MainScript |
@@ -146,10 +146,10 @@
 ## 四、进度汇总
 
 - 总任务数：41（T01–T41，T36–T41 为 2026-09-28 用户追加，原编号表无此 ID）
-- ✅ 已完成：25（T03,T04,T05,T08,T09,T10,T12,T13,T22,T24,T25,T26,T27,T28,T29,T31,T32,T33,T35,T36,T37,T38,T39,T40,T41）
+- ✅ 已完成：26（T03,T04,T05,T08,T09,T10,T12,T13,T22,T24,T25,T26,T27,T28,T29,T31,T32,T33,T34,T35,T36,T37,T38,T39,T40,T41）
 - 🔄 进行中：12（T02,T07,T11,T14,T15,T16,T17,T18,T19,T20,T21,T23）
 - 🔄 精炼完成待真机验证：1（T06，部署顺序/9地图补点已修正，下兵颜色待 emulator-5556 复标）
-- 🔄 真机验证进行中：2（T30,T34，emulator-5556 已在线 2026-09-28，框架已通、待补齐开关/触发入口）
+- 🔄 真机验证进行中：1（T30，emulator-5556 已在线，框架已通、待开 DO_CLAN_GAMES 开关实跑闭环）
 - ⏭ 跳过：1（T01，见决策记录）
 - ❌ 不抄/取消：2（村庄改名、部落靓标签，见决策记录）
 

@@ -2,6 +2,7 @@ package com.coc.zkqcode.jar.code.universal.recognizer
 
 import android.graphics.Bitmap
 import com.coc.zkqcode.core.system.screencapture.ScreenCaptureManager
+import com.coc.zkqcode.core.util.basic.RunShell
 import com.coc.zkqcode.core.util.basic.ShowMessage
 import com.coc.zkqcode.core.util.fileactions.FileHelper
 import com.google.android.gms.tasks.Tasks
@@ -191,8 +192,27 @@ object PixelFontChinese {
         return sb.toString()
     }
 
+    /**
+     * 保存前先把 [HARVEST_PATH] 已有字库读回来合并进 [runtimeGlyphs]，
+     * 避免每次保存只用"本次会话采集"覆盖掉之前多轮积累的成果。
+     */
+    private suspend fun loadExistingHarvest() {
+        val lines = try {
+            RunShell.run("cat $HARVEST_PATH", false)
+        } catch (e: Exception) {
+            emptyList()
+        }
+        if (lines.isEmpty()) return
+        var merged = 0
+        for (glyph in parseLibrary(lines.joinToString("\n"))) {
+            if (addGlyph(glyph)) merged++
+        }
+        if (merged > 0) ShowMessage("中文字库合并已有 $merged 条")
+    }
+
     /** 把采集到的字模写到 [HARVEST_PATH]（经 WebSocket 文件通道，与 Memory.kt 同一套机制）。 */
     suspend fun saveHarvested(): Boolean {
+        loadExistingHarvest()
         val content = exportEntries()
         if (content.isBlank()) {
             ShowMessage("中文字库为空，无需保存")

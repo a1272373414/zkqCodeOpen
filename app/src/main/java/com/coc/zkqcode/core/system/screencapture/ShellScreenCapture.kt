@@ -119,6 +119,10 @@ object ShellScreenCapture {
                 val result = captureViaPng(stdin, stdout, asBitmap)
 
                 if (result != null) {
+                    // 用完即断：持久 shell 的输出流会残留上一次的 PNG 数据，
+                    // 后续捕获会读到陈旧画面（实测整个会话都停在第一帧）。
+                    // 每次捕获成功后立即关闭连接，下次重新拉起 su 拿实时画面。
+                    synchronized(connectionLock) { closeConnectionLocked() }
                     return result
                 }
 

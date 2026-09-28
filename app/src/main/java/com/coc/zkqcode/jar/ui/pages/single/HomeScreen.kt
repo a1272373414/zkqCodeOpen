@@ -56,6 +56,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.coc.zkqcode.core.util.basic.RunShell
+import com.coc.zkqcode.jar.code.universal.recognizer.PixelFontChinese
+import com.coc.zkqcode.core.util.basic.ShowMessage
+import android.content.Intent
+import com.coc.zkqcode.core.ui.floatingwindows.UIWindowService
+import kotlinx.coroutines.CoroutineScope
 
 @Composable
 fun HomeScreen(
@@ -270,6 +275,44 @@ fun HomeScreen(
                                     SettingInputRow(key = GLOBAL_SETTINGS.DEVICE_REMARK.key)
                                 }
                             }
+                            // T34 真机采集入口：独立成行，避免被 FlowRow 组合裁剪导致不渲染
+                            val context = LocalContext.current
+                            CustomButton(
+                                text = "采集字模(T34)",
+                                onClick = {
+                                    // 关闭悬浮窗会销毁本面板的组合并取消按钮自身所在协程，
+                                    // 因此整个采集流程必须放到独立协程作用域里执行
+                                    CoroutineScope(Dispatchers.Default).launch {
+                                        ShowMessage("关闭悬浮窗并切到游戏采集中文字模…")
+                                        // 悬浮窗主面板会盖在游戏上被一并截进图里，先停掉 UIWindowService，
+                                        // 并等它把窗口真正移除（实测立即截屏仍会带到面板）
+                                        context.stopService(Intent(context, UIWindowService::class.java))
+                                        delay(3000)
+                                        RunShell.runNoOutput(
+                                            "monkey -p com.tencent.tmgp.supercell.clashofclans -c android.intent.category.LAUNCHER 1",
+                                            false
+                                        )
+                                        // 轮询等 COC 真正到前台（冷启动可能超过 10 秒），最多等 20 秒
+                                        var waited = 0
+                                        var ready = false
+                                        while (waited < 20000 && !ready) {
+                                            delay(1000)
+                                            waited += 1000
+                                            val out = RunShell.run(
+                                                "dumpsys activity activities | grep -E 'topResumedActivity|mResumedActivity'",
+                                                false
+                                            )
+                                            ready = out.any { it.contains("com.tencent.tmgp.supercell.clashofclans") }
+                                        }
+                                        // 再留 2 秒让游戏画面渲染完成
+                                        delay(2000)
+                                        val n = PixelFontChinese.harvestFromScreen()
+                                        val ok = PixelFontChinese.saveHarvested()
+                                        ShowMessage("采集字模完成：新增 ${n} 条，写入/sdcard/zkqFiles/chinese_font.txt=${ok}")
+                                    }
+                                },
+                                explain = "T34 真机采集入口：先切到 COC，再调用 harvestFromScreen 用 ML Kit 当老师自动标注游戏界面中文，采集像素字模到 chinese_font.txt，用于离线中文识别。"
+                            )
                             FlowRow {
                                 CustomButton(
                                     text = "清除账号记忆",
