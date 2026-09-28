@@ -31,7 +31,7 @@
 |---|---|---|---|---|---|---|---|
 | T01 | 坐标归一化集成 pass | `app/.../zkqcode/jar` CoordNormalizer 集成 | 1天 | 低 | 源 r()/b() | ⬜ | 把散落硬编码字面量替换为归一化调用 |
 | T02 | NCC 接入 OCR pipeline | `NccMatcher.kt` 接线 | 1天 | 低 | 源 ncc.c | 🔄 | 已接线为**模板匹配**：`TemplateMatcher`(assets/templates + 区域 NCC，阈值 0.75) + `SceneState` 模板兜底钩子 `TEMPLATE_RULES`，配套 `tools/make_template.py`；OCR pipeline 兜底仍未接；离线自检 0 误命中，待真机验证 |
-| T03 | 特征带方向搜索 | `FindMultiColors.kt` / Rust | 1天 | 低 | 源 函数24a/26a | ⬜ | 评估是否给找色增加方向参数提升滑动场景鲁棒性 |
+| T03 | 特征带方向搜索 | `rust_logic/src/color/mod.rs` | 1天 | 低 | 源 函数24a/26a | ✅ | 评估结论：方向参数已端到端接通(Kotlin `ColorSchema.direction`→`findMultiColors`→Rust `findMultiColorsRaw`→`find_multi_colors_internal`)，但原 Rust 仅实现 0/1 且 `dir=1` 误作「右下→左上」。已修正 `find_multi_colors_internal`：`0=左上→右下 / 1=左下→右上 / 2=右上→左下 / 3=右下→左上 / 4=中心向四周 / 5=四周向中心`，对齐源 `函数24a`(默认 dir=1=BL→TR)。`cargo check` 通过。**待办接线**：当前 `MyColors` 所有 `ColorSchema.parse` 第7参 `dir` 写死 0，需在颜色生成器透传源方向值(避免无设备时全量翻方向，建议随 T30 真机标定逐色接入)；运行时须 `cargo build --release` 重新产出 .so 方生效 |
 | T19 | 特征标定工具链（自动生成 + 模板裁剪） | `tools/make_feature.py` / `tools/make_template.py` | 1天 | 中 | 实机痛点：文字按钮需逐点量色 | 🔄 | `make_feature.py`：给截图+矩形自动生成 `ColorSchema`(主色众数 + 跨样本稳定偏移点) + 正/负样本自检；`make_template.py`：裁剪模板到 `assets/templates` 并做同口径 NCC 自检（可限区域/阈值）。已离线验证（编辑模式：15 张负样本 0 误命中），待实机使用验证 |
 
 ### P1 — 明确缺失，直接抄（高优先）
@@ -139,10 +139,10 @@
 ## 四、进度汇总
 
 - 总任务数：35（T01–T35）
-- ✅ 已完成：17（T04,T05,T08,T09,T10,T22,T24,T25,T26,T27,T28,T29,T31,T32,T33,T35 + T06代码精炼）
+- ✅ 已完成：18（T03,T04,T05,T06,T08,T09,T10,T22,T24,T25,T26,T27,T28,T29,T31,T32,T33,T35）
 - 🔄 进行中：12（T02,T07,T11,T14,T15,T16,T17,T18,T19,T20,T21,T23）
 - 🔄 精炼完成待真机验证：1（T06，部署顺序/9地图补点已修正，下兵颜色待 emulator-5556 复标）
-- ⬜ 待办：6（T01,T03,T12,T13,T30,T34）
+- ⬜ 待办：5（T01,T12,T13,T30,T34）
 - ❌ 不抄/取消：2（村庄改名、部落靓标签，见决策记录）
 
 ---

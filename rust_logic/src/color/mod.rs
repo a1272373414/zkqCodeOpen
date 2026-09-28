@@ -41,25 +41,67 @@ where
     x2 = x2.min(width - 1);
     y2 = y2.min(height - 1);
 
-    if direction == 1 {
-        // From bottom-right to top-left
-        for y in (y1..=y2).rev() {
-            for x in (x1..=x2).rev() {
-                let pixel = get_pixel(x, y);
-                if is_color_match(pixel, main_color, threshold) {
-                    if check_offsets(x, y, width, height, threshold, offsets_arr, &get_pixel) {
+    // 方向语义对齐源 `函数24a/26a` 的 触动精灵 findMultiColor（degree）：
+    // 0=左上→右下(默认, x↑y↑) / 1=左下→右上(x↑y↓) / 2=右上→左下(x↓y↑) /
+    // 3=右下→左上(x↓y↓) / 4=中心向四周 / 5=四周向中心。
+    // 早期实现只支持 0/1 且 dir=1 误作「右下→左上」，此处修正并补全 2/3/4/5。
+    match direction {
+        // 1 = 左下→右上（x 递增，y 递减）
+        1 => {
+            for y in (y1..=y2).rev() {
+                for x in x1..=x2 {
+                    if try_match(x, y, width, height, main_color, threshold, offsets_arr, &get_pixel) {
                         return Some((x, y));
                     }
                 }
             }
         }
-    } else {
-        // Default: From top-left to bottom-right (direction 0 or any other)
-        for y in y1..=y2 {
-            for x in x1..=x2 {
-                let pixel = get_pixel(x, y);
-                if is_color_match(pixel, main_color, threshold) {
-                    if check_offsets(x, y, width, height, threshold, offsets_arr, &get_pixel) {
+        // 2 = 右上→左下（x 递减，y 递增）
+        2 => {
+            for y in y1..=y2 {
+                for x in (x1..=x2).rev() {
+                    if try_match(x, y, width, height, main_color, threshold, offsets_arr, &get_pixel) {
+                        return Some((x, y));
+                    }
+                }
+            }
+        }
+        // 3 = 右下→左上（x 递减，y 递减）
+        3 => {
+            for y in (y1..=y2).rev() {
+                for x in (x1..=x2).rev() {
+                    if try_match(x, y, width, height, main_color, threshold, offsets_arr, &get_pixel) {
+                        return Some((x, y));
+                    }
+                }
+            }
+        }
+        // 4 = 中心向四周；5 = 四周向中心
+        4 | 5 => {
+            let cx = (x1 + x2) / 2;
+            let cy = (y1 + y2) / 2;
+            let mut pts: Vec<(i32, i32)> =
+                Vec::with_capacity(((x2 - x1 + 1) * (y2 - y1 + 1)) as usize);
+            for y in y1..=y2 {
+                for x in x1..=x2 {
+                    pts.push((x, y));
+                }
+            }
+            pts.sort_by_key(|&(x, y)| {
+                let d = (x - cx) * (x - cx) + (y - cy) * (y - cy);
+                if direction == 5 { -d } else { d }
+            });
+            for (x, y) in pts {
+                if try_match(x, y, width, height, main_color, threshold, offsets_arr, &get_pixel) {
+                    return Some((x, y));
+                }
+            }
+        }
+        // 0 及其它 → 左上→右下（默认）
+        _ => {
+            for y in y1..=y2 {
+                for x in x1..=x2 {
+                    if try_match(x, y, width, height, main_color, threshold, offsets_arr, &get_pixel) {
                         return Some((x, y));
                     }
                 }
@@ -103,4 +145,19 @@ where
         i += 3;
     }
     true
+}
+
+#[inline(always)]
+fn try_match<F: Fn(i32, i32) -> u32>(
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+    main_color: u32,
+    threshold: i32,
+    offsets_arr: &[i32],
+    get_pixel: &F,
+) -> bool {
+    is_color_match(get_pixel(x, y), main_color, threshold)
+        && check_offsets(x, y, width, height, threshold, offsets_arr, get_pixel)
 }
