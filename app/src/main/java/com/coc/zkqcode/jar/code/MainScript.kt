@@ -36,6 +36,8 @@ import com.coc.zkqcode.jar.code.universal.smalltools.ChangeWarBase
 import com.coc.zkqcode.jar.code.universal.smalltools.Trader
 import com.coc.zkqcode.jar.code.mainbase.clan.ClanWar
 import com.coc.zkqcode.jar.code.mainbase.league.League
+import com.coc.zkqcode.jar.code.mainbase.troop.TrainTroops
+import com.coc.zkqcode.jar.code.mainbase.upgrade.Upgrade
 import com.coc.zkqcode.jar.code.mainbase.clan.donateToClan
 import com.coc.zkqcode.core.util.fileactions.LogHelper.logAndRestart
 import com.coc.zkqcode.jar.code.mainbase.herohall.upgradeGearsAndPets
@@ -131,6 +133,12 @@ suspend fun runMainScript() {
 
             // 联赛(CWL)进攻（T10）：LEAGUE_WAR_ENABLED 开启且有可用进攻机会时执行（下兵复用主世界）
             League.leagueAttack(InGamesVars.currentAccountNumber)
+
+            // 训练部队/法术（T12）：TRAIN_ENABLED 开启且本账号配置了兵种/法术数量时执行
+            TrainTroops.trainTroops(InGamesVars.currentAccountNumber)
+
+            // 升级建筑（T13）：UPGRADE_ENABLED 开启且本账号配置了目标建筑时执行
+            Upgrade.upgradeBuildings(InGamesVars.currentAccountNumber)
 
             if (!playBuilderBase()) {
                 ShowMessage("夜世界对战完成，准备进入主世界")

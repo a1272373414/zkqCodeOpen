@@ -92,6 +92,8 @@
 | T33 | 竞赛接入中文 OCR：已接任务区分「主世界 / 夜世界(建筑大师)」 | `jar/code/mainbase/clangames/ClanGames.kt` | 0.5天 | 中 | 源 L33948 OCR 判「建筑大师」 | ✅ | 补 T27 缺口：`detectAcceptedTaskType()` 点开已接任务 → OCR(661,167,799,242) → 含"建筑大师"记 night 否则 main；`ClanGamesState` 增 `isNightTask`，记忆值改 `night/main/0`，`BuilderBaseAttack` 仅 `== "night"` 时切用"接取竞赛后"局数；编译通过 |
 | T34 | 真机采集中文字模 + 中文识别验证 | 采集工具 + 字库常量 | 0.5天 | 中 | — | ⬜ | 需 emulator-5556（当前不在线）；先采集部落名/村庄名高频字并验证 `detectAcceptedTaskType` 命中率 |
 | T35 | 文字按钮定位 `ChineseTextReader.locate()`（按文案定位 + 坐标反算） | `jar/code/universal/recognizer/ChineseTextReader.kt` | 0.5天 | 中 | T11 收尾/补充 | ✅ | ML Kit 文字识别结果带包围盒，新增 `locate(keyword,...)`：识别→命中含关键字行→包围盒 `/scale`+裁剪偏移反算回屏幕坐标返回 `Rect`；复用 `minConfidence`/`requireCJK` 双闸；调用方自行降级（回退颜色匹配/跳过）。`buildJar` 通过、0 lint |
+| T36 | 训练部队/法术（主世界） | `jar/code/mainbase/troop/TrainTroops.kt` | 1.5天 | 中 | 源 造兵(241a/239a/240a) Q段 L34253-41171 | ✅ | 用户 2026-09-28 追加（原编号表无此 ID）。新建 `TrainTroops.trainTroops(account)`：读 `TRAIN_ENABLED` 开关→进军队/造兵栏(文字 locate)→按账号记忆键 `Train_<兵种/法术>` 数量逐个文字定位+连点「训练」。源「左中右栏切换+单位占用扣减+活动兵/超级兵强化」待 T30 复标。`buildJar` 通过、0 lint、挂 MainScript |
+| T37 | 升级建筑（主世界） | `jar/code/mainbase/upgrade/Upgrade.kt` | 2天 | 中 | 源 升级(202a/205a/206a) P段 L24387-34252 | ✅ | 用户 2026-09-28 追加（原编号表无此 ID）。新建 `Upgrade.upgradeBuildings(account)`：读 `UPGRADE_ENABLED` 开关→开商店/建筑列表(文字 locate)→按账号记忆键 `Upgrade_<建筑>` 逐个定位+点「升级」+「确定」。源「建筑列表 OCR 扫描+空闲工人判断+宝石秒」待 T30 复标（OCR 字库 jianzhu0.txt）。`buildJar` 通过、0 lint、挂 MainScript |
 
 ### P3 — 可选/低优
 
@@ -138,8 +140,8 @@
 
 ## 四、进度汇总
 
-- 总任务数：35（T01–T35）
-- ✅ 已完成：18（T03,T04,T05,T06,T08,T09,T10,T22,T24,T25,T26,T27,T28,T29,T31,T32,T33,T35）
+- 总任务数：37（T01–T37，T36/T37 为 2026-09-28 用户追加的训练/升级，原编号表无此 ID）
+- ✅ 已完成：19（T03,T04,T05,T08,T09,T10,T22,T24,T25,T26,T27,T28,T29,T31,T32,T33,T35,T36,T37）
 - 🔄 进行中：12（T02,T07,T11,T14,T15,T16,T17,T18,T19,T20,T21,T23）
 - 🔄 精炼完成待真机验证：1（T06，部署顺序/9地图补点已修正，下兵颜色待 emulator-5556 复标）
 - ⬜ 待办：5（T01,T12,T13,T30,T34）

@@ -49,6 +49,11 @@ object StorageKeys {
     // 联赛(CWL)进攻主开关（T10）：按账号，1=开启
     const val LEAGUE_WAR_ENABLED = "LeagueWarEnabled"
 
+    // 训练主开关（T12）：按账号，1=开启
+    const val TRAIN_ENABLED = "TrainEnabled"
+    // 升级主开关（T13）：按账号，1=开启
+    const val UPGRADE_ENABLED = "UpgradeEnabled"
+
     /**
      * Generate a storage key with account number suffix.
      * Used for per-account data that needs to be tracked separately.
