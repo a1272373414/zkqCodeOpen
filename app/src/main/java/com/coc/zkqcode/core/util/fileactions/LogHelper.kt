@@ -36,8 +36,15 @@ object LogHelper {
     /** 清理过期日志时的锁，避免与写入并发产生竞争。 */
     private val cleanupLock = Any()
 
-    /** 保证 Timber 只种一次：App 进程里 MainActivity 与 DaemonService 都会调 [initTimber]，
-     *  重复 plant FileLoggingTree 会导致**每条日志被写两遍**（实测日志成对重复）。 */
+    /**
+     * 保证 Timber 只种一次（进程内）。
+     *
+     * 背景：重复 plant [FileLoggingTree] 会让**同一条日志被写两遍**——实测表现为日志成对重复：
+     * 两行内容完全相同、时间戳相差 0~1ms（两个 tree 各自格式化一次时间）。
+     * [initTimber] 目前由 MainActivity 调用，Activity 重建/多次创建时可能重复走到这里，故需此守卫。
+     *
+     * 注意：本类是 [LogHelper] 的嵌套类，下面所有外层成员的访问都要加 `LogHelper.` 限定符。
+     */
     private val timberPlanted = AtomicBoolean(false)
 
     fun initTimber(context: Context) {
